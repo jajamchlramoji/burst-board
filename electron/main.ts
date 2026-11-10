@@ -17,6 +17,14 @@ let mainWindow: BrowserWindow | null = null;
 let captureWindow: BrowserWindow | null = null;
 let miniWindow: BrowserWindow | null = null;
 
+/**
+ * Two copies of the app would read-modify-write the same JSON file - and the
+ * same .tmp file - so only the first one runs. Starting a second hands focus
+ * back to the copy that is already going, then exits.
+ */
+const hasInstanceLock = app.requestSingleInstanceLock();
+if (!hasInstanceLock) app.quit();
+
 /** One renderer bundle, routed by hash. */
 function loadRoute(win: BrowserWindow, route: string): void {
   if (DEV_URL) {
@@ -181,6 +189,7 @@ function startBurstFlow(): void {
 }
 
 app.whenReady().then(() => {
+  if (!hasInstanceLock) return;
   nativeTheme.themeSource = 'dark';
   store = new Store();
 
@@ -219,6 +228,11 @@ app.whenReady().then(() => {
   setInterval(() => refreshTray(store, trayDeps), 30_000);
 
   app.on('activate', () => showMainWindow());
+});
+
+app.on('second-instance', () => {
+  app.focus({ steal: true });
+  showMainWindow();
 });
 
 app.on('will-quit', () => {

@@ -42,36 +42,83 @@ export class Store {
     return this.file;
   }
 
-  private load(): void {
+  /** The data file as it stood at the last good launch. */
+  get backupFile(): string {
+    return `${this.file}.bak`;
+  }
+
+  /** Fill in anything a stored file is missing, without trusting its shape. */
+  private hydrate(parsed: Partial<AppState>): AppState {
+    return {
+      ...defaultState(),
+      ...parsed,
+      settings: { ...defaultSettings(), ...(parsed.settings ?? {}) },
+      ideas: parsed.ideas ?? [],
+      ships: parsed.ships ?? [],
+      history: parsed.history ?? [],
+      burst: parsed.burst ?? null,
+      version: STATE_VERSION,
+    };
+  }
+
+  /** Parse a state file. Returns null when it is missing or unreadable. */
+  private readState(file: string): Partial<AppState> | null {
     try {
-      if (!fs.existsSync(this.file)) {
-        this.state = defaultState();
-        this.flush();
-        return;
-      }
-      const raw = fs.readFileSync(this.file, 'utf8');
-      const parsed = JSON.parse(raw) as Partial<AppState>;
-      this.state = {
-        ...defaultState(),
-        ...parsed,
-        settings: { ...defaultSettings(), ...(parsed.settings ?? {}) },
-        ideas: parsed.ideas ?? [],
-        ships: parsed.ships ?? [],
-        history: parsed.history ?? [],
-        burst: parsed.burst ?? null,
-        version: STATE_VERSION,
-      };
+      if (!fs.existsSync(file)) return null;
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+      return parsed as Partial<AppState>;
     } catch (err) {
-      // Never lose data silently: keep a copy of the unreadable file.
-      try {
-        fs.copyFileSync(this.file, `${this.file}.corrupt-${Date.now()}`);
-      } catch {
-        /* ignore */
-      }
-      console.error('[burst-board] could not read data file, starting fresh:', err);
+      console.error(`[burst-board] could not read ${path.basename(file)}:`, err);
+      return null;
+    }
+  }
+
+  /**
+   * The ship log is the whole point of the app and it lives in a single file,
+   * so keep the last good launch's copy beside it. If the live file ever turns
+   * up unreadable, that copy is what we fall back to instead of starting over.
+   */
+  private writeBackup(): void {
+    try {
+      fs.copyFileSync(this.file, this.backupFile);
+    } catch (err) {
+      console.error('[burst-board] could not write the backup:', err);
+    }
+  }
+
+  private load(): void {
+    if (!fs.existsSync(this.file)) {
       this.state = defaultState();
       this.flush();
+      return;
     }
+
+    const live = this.readState(this.file);
+    if (live) {
+      this.state = this.hydrate(live);
+      this.writeBackup();
+      return;
+    }
+
+    // Unreadable. Keep the evidence, then try the backup before giving up.
+    try {
+      fs.copyFileSync(this.file, `${this.file}.corrupt-${Date.now()}`);
+    } catch {
+      /* ignore */
+    }
+
+    const backup = this.readState(this.backupFile);
+    if (backup) {
+      this.state = this.hydrate(backup);
+      console.warn('[burst-board] data file was unreadable - recovered from the backup.');
+      this.flush();
+      return;
+    }
+
+    console.error('[burst-board] no readable data file or backup, starting fresh.');
+    this.state = defaultState();
+    this.flush();
   }
 
   /** Atomic write via temp file + rename. Debounced. */
