@@ -14,7 +14,76 @@
   --warn: #ff7a66;
   --radius: 14px;
   --radius-sm: 10px;
+
+  /* Derived surfaces. Named so a palette swap reaches all of them. */
+  --pill-fomo-line: #2d3c63;
+  --pill-fomo-bg: #141b2c;
+  --pill-good-line: #1e4a3a;
+  --pill-good-bg: #0f1d19;
+  --pill-accent-line: #4a3a16;
+  --pill-accent-bg: #1d1708;
+  --banner-warn-bg: #241512;
+  --banner-warn-line: #5a2a22;
+  --banner-warn-text: #ffb7a8;
+  --banner-info-bg: #101b18;
+  --banner-info-line: #1e4a3a;
+  --banner-info-text: #a8e9cd;
+  --accent-glow: #ffb43d1f;
+  --scrim: #05070ad9;
+  --shadow-modal: #000000a6;
+  --shadow-toast: #000000a0;
+  --capture-bg: #11141b;
+  --mini-bg: #0b0d12f2;
+  --scrollbar: #222a3a;
+
   color-scheme: dark;
+}
+
+/*
+ * Light mode. The app asks the main process for the theme, the main process
+ * sets nativeTheme.themeSource, and that is what decides which of these two
+ * palettes applies - so "System" follows macOS and the other two override it.
+ */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f7fb;
+    --panel: #ffffff;
+    --panel-2: #eef1f7;
+    --line: #d6dce9;
+    --line-soft: #e7ebf3;
+    --text: #141a28;
+    --muted: #5a6478;
+    --muted-2: #7b8598;
+    /* The bright amber is unreadable on white, so text and borders use a
+       deeper one while anything filled keeps white ink on top. */
+    --accent: #9a5a00;
+    --accent-ink: #ffffff;
+    --good: #0b7049;
+    --fomo: #2550c8;
+    --warn: #b23523;
+
+    --pill-fomo-line: #bdcbf0;
+    --pill-fomo-bg: #eef3ff;
+    --pill-good-line: #b4ddc9;
+    --pill-good-bg: #ecfaf4;
+    --pill-accent-line: #e8cf9a;
+    --pill-accent-bg: #fff6e6;
+    --banner-warn-bg: #fdeeeb;
+    --banner-warn-line: #f0c3bb;
+    --banner-warn-text: #8c2a1a;
+    --banner-info-bg: #eafaf3;
+    --banner-info-line: #b4ddc9;
+    --banner-info-text: #0b5c3c;
+    --accent-glow: #9a5a0026;
+    --scrim: #5a6375a6;
+    --shadow-modal: #1b22303d;
+    --shadow-toast: #1b223047;
+    --capture-bg: #ffffff;
+    --mini-bg: #fffffff2;
+    --scrollbar: #c4ccdb;
+
+    color-scheme: light;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -169,11 +238,11 @@ select { appearance: none; background-image: none; }
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
-.pill.fomo { color: var(--fomo); border-color: #2d3c63; background: #141b2c; }
-.pill.own { color: var(--good); border-color: #1e4a3a; background: #0f1d19; }
-.pill.shipped { color: var(--good); border-color: #1e4a3a; background: #0f1d19; }
+.pill.fomo { color: var(--fomo); border-color: var(--pill-fomo-line); background: var(--pill-fomo-bg); }
+.pill.own { color: var(--good); border-color: var(--pill-good-line); background: var(--pill-good-bg); }
+.pill.shipped { color: var(--good); border-color: var(--pill-good-line); background: var(--pill-good-bg); }
 .pill.parked { color: var(--muted); }
-.pill.active { color: var(--accent); border-color: #4a3a16; background: #1d1708; }
+.pill.active { color: var(--accent); border-color: var(--pill-accent-line); background: var(--pill-accent-bg); }
 
 /* ---------- Lists ---------- */
 .item {
@@ -208,8 +277,8 @@ select { appearance: none; background-image: none; }
   margin-bottom: 14px;
   border: 1px solid;
 }
-.banner.warn { background: #241512; border-color: #5a2a22; color: #ffb7a8; }
-.banner.info { background: #101b18; border-color: #1e4a3a; color: #a8e9cd; }
+.banner.warn { background: var(--banner-warn-bg); border-color: var(--banner-warn-line); color: var(--banner-warn-text); }
+.banner.info { background: var(--banner-info-bg); border-color: var(--banner-info-line); color: var(--banner-info-text); }
 
 /* ---------- Stats ---------- */
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
@@ -250,7 +319,7 @@ select { appearance: none; background-image: none; }
   overflow: hidden;
 }
 .spin-slot.rolling { color: var(--muted); animation: jitter 0.09s infinite alternate; }
-.spin-slot.locked { border-color: var(--accent); box-shadow: 0 0 0 3px #ffb43d1f; }
+.spin-slot.locked { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
 @keyframes jitter {
   from { transform: translateY(-3px); opacity: 0.6; }
   to { transform: translateY(3px); opacity: 1; }
@@ -292,7 +361,7 @@ select { appearance: none; background-image: none; }
 .modal-back {
   position: fixed;
   inset: 0;
-  background: #05070ad9;
+  background: var(--scrim);
   backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
@@ -307,7 +376,7 @@ select { appearance: none; background-image: none; }
   padding: 26px;
   width: 100%;
   max-width: 500px;
-  box-shadow: 0 24px 70px #000000a6;
+  box-shadow: 0 24px 70px var(--shadow-modal);
 }
 .modal h3 { margin: 0 0 6px; font-size: 21px; letter-spacing: -0.4px; }
 .modal .modal-sub { color: var(--muted); margin: 0 0 18px; font-size: 14px; }
@@ -317,7 +386,7 @@ select { appearance: none; background-image: none; }
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #11141b;
+  background: var(--capture-bg);
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
@@ -351,7 +420,7 @@ select { appearance: none; background-image: none; }
 .mini {
   -webkit-app-region: drag;
   height: 100%;
-  background: #0b0d12f2;
+  background: var(--mini-bg);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 10px 12px;
@@ -382,9 +451,9 @@ select { appearance: none; background-image: none; }
   padding: 11px 18px;
   border-radius: 999px;
   font-size: 13.5px;
-  box-shadow: 0 10px 30px #000000a0;
+  box-shadow: 0 10px 30px var(--shadow-toast);
   z-index: 60;
 }
 
 ::-webkit-scrollbar { width: 10px; }
-::-webkit-scrollbar-thumb { background: #222a3a; border-radius: 6px; border: 3px solid var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 6px; border: 3px solid var(--bg); }

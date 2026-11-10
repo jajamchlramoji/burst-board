@@ -20,9 +20,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:electron": "npm run build && electron tests/electron-smoke.cjs",
-    "verify": "npm run typecheck && npm run test && npm run test:electron"
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run test:electron",
+    "lint": "eslint ."
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
@@ -30,8 +32,12 @@
     "cross-env": "^7.0.3",
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
     "rimraf": "^6.0.1",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.72.2",
     "vite": "^6.0.3",
     "vitest": "^3.2.7",
     "wait-on": "^8.0.1"
@@ -78,5 +84,6 @@
       "artifactName": "Burst-Board-${version}-arm64.dmg"
     },
     "afterPack": "scripts/after-pack.cjs"
-  }
+  },
+  "license": "Apache-2.0"
 }

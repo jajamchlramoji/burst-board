@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    # Ubuntu on purpose: these three checks are platform-independent, and on a
+    # private repo a macOS runner bills at ten times the rate. The Electron
+    # smoke test (npm run test:electron) needs a real display and is run
+    # locally before packaging.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+        env:
+          # No need to pull a 100 MB Electron binary just to typecheck and lint.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test

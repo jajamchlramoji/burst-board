@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { AppState } from '../../shared/types';
 import { WHERE_LABELS } from '../../shared/types';
 import {
@@ -32,13 +32,8 @@ export default function Burst({ state, flash, goSpin }: Props) {
   const [extraUrl, setExtraUrl] = useState('');
   const [win, setWin] = useState('');
   const [v2, setV2] = useState('');
+  const [logFor, setLogFor] = useState<string | null>(null);
   const [endConfirm, setEndConfirm] = useState(false);
-
-  // Keep the log fields in step with whichever ship is in the burst.
-  useEffect(() => {
-    setWin(ship?.win ?? '');
-    setV2(ship?.v2 ?? '');
-  }, [ship?.id, ship?.win, ship?.v2]);
 
   if (!burst || !ship) {
     return (
@@ -56,6 +51,17 @@ export default function Burst({ state, flash, goSpin }: Props) {
         </div>
       </div>
     );
+  }
+
+  // Seed the log fields from whichever ship the burst is on, and only when
+  // that ship changes. This used to be an effect keyed on win and v2 as well,
+  // which meant any save - including one from the ship log - overwrote what
+  // was being typed here. Adjusting state during render is the supported way
+  // to reset local state when a prop changes.
+  if (logFor !== ship.id) {
+    setLogFor(ship.id);
+    setWin(ship.win);
+    setV2(ship.v2);
   }
 
   const ms = elapsedMs(burst, now);

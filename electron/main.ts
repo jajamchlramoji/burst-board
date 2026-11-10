@@ -6,6 +6,7 @@ import { BURST_END_MS, elapsedMs } from '../shared/burst';
 import { exportMarkdown } from './export';
 import { startScheduler } from './notify';
 import { createTray, refreshTray } from './tray';
+import { buildAppMenu } from './menu';
 
 const CAPTURE_HOTKEY = 'CommandOrControl+Shift+B';
 
@@ -25,6 +26,17 @@ let miniWindow: BrowserWindow | null = null;
  */
 const hasInstanceLock = app.requestSingleInstanceLock();
 if (!hasInstanceLock) app.quit();
+
+/** The one place the OS is told which palette to use. The stylesheet then
+ *  follows prefers-color-scheme, so every window changes at once. */
+function applyTheme(): void {
+  nativeTheme.themeSource = store.get().settings.theme;
+}
+
+/** Window chrome has to match, or a light window flashes dark while loading. */
+function chromeColor(): string {
+  return nativeTheme.shouldUseDarkColors ? '#0b0d12' : '#f5f7fb';
+}
 
 /** Renderer settings every window shares. Sandboxed: the preload only needs
  *  contextBridge and ipcRenderer, both of which work inside the sandbox. */
@@ -76,7 +88,7 @@ function createMainWindow(): BrowserWindow {
     minHeight: 620,
     show: false,
     title: 'Burst Board',
-    backgroundColor: '#0b0d12',
+    backgroundColor: chromeColor(),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 18 },
     webPreferences: rendererPrefs(),
@@ -122,7 +134,7 @@ export function openCaptureWindow(): void {
     show: false,
     alwaysOnTop: true,
     skipTaskbar: true,
-    backgroundColor: '#11141b',
+    backgroundColor: chromeColor(),
     webPreferences: rendererPrefs(),
   });
   let closeOnBlur = false;
@@ -172,7 +184,7 @@ export function setMiniTimer(on: boolean): void {
     skipTaskbar: true,
     maximizable: false,
     minimizable: false,
-    backgroundColor: '#0b0d12',
+    backgroundColor: chromeColor(),
     webPreferences: rendererPrefs(),
   });
   win.setAlwaysOnTop(true, 'floating');
@@ -257,8 +269,8 @@ function startBurstFlow(): void {
 
 app.whenReady().then(() => {
   if (!hasInstanceLock) return;
-  nativeTheme.themeSource = 'dark';
   store = new Store();
+  applyTheme();
 
   registerIpc(store, {
     broadcast: () => broadcastState(store),
@@ -268,11 +280,20 @@ app.whenReady().then(() => {
     exportMarkdown: () => exportMarkdown(store.get()),
     refreshTray: () => refreshTray(store, trayDeps),
     applyHotkey,
+    applyTheme,
     startBurstFlow,
   });
 
   // Before any window reads it: yesterday's burst should not block today's.
   endStaleBurst();
+
+  buildAppMenu({
+    openCapture: openCaptureWindow,
+    startBurst: startBurstFlow,
+    showMain: (route?: string) => showMainWindow(route),
+    exportMarkdown: () => void exportMarkdown(store.get()),
+    dataFile: () => store.dataFile,
+  });
 
   createMainWindow();
   createTray(store, trayDeps);

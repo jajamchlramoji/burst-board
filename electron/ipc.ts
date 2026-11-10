@@ -26,6 +26,7 @@ export interface IpcHooks {
   exportMarkdown?: () => Promise<ExportResult>;
   refreshTray?: () => void;
   applyHotkey?: () => void;
+  applyTheme?: () => void;
   startBurstFlow?: () => void;
 }
 
@@ -90,6 +91,9 @@ function settingsPatch(raw: unknown): Partial<Settings> {
   if (Number.isInteger(p.reminderDay)) {
     const d = p.reminderDay as number;
     if (d >= 0 && d <= 6) out.reminderDay = d;
+  }
+  if (p.theme === 'system' || p.theme === 'dark' || p.theme === 'light') {
+    out.theme = p.theme;
   }
   const time = str(p.reminderTime)?.trim();
   if (time) {
@@ -411,6 +415,7 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
       Object.assign(s.settings, clean);
     });
     hooks.applyHotkey?.();
+    hooks.applyTheme?.();
     return ok();
   });
 

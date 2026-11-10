@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAppState, useFlash } from './lib/hooks';
 import Inbox from './views/Inbox';
 import Shrink from './views/Shrink';
@@ -22,15 +22,20 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('inbox');
   const [shrinkFrom, setShrinkFrom] = useState<string | null>(null);
   const [flash, setFlash] = useFlash();
+  const clearFrom = useCallback(() => setShrinkFrom(null), []);
   const burstRunning = Boolean(state?.burst);
+  const [sawBurst, setSawBurst] = useState(false);
 
   // The main process can ask us to go somewhere (tray, hotkey, notification).
   useEffect(() => window.burst.onNavigate((route) => setTab(route as Tab)), []);
 
-  // A running burst is the only thing that matters while it runs.
-  useEffect(() => {
+  // A burst starting is the only thing that moves you off your tab, and it is
+  // the main process that starts it. Edge-triggered during render rather than
+  // in an effect, so there is no second render just to switch tab.
+  if (burstRunning !== sawBurst) {
+    setSawBurst(burstRunning);
     if (burstRunning) setTab('burst');
-  }, [burstRunning]);
+  }
 
   if (!state) {
     return (
@@ -112,7 +117,7 @@ export default function App() {
             flash={setFlash}
             goSpin={() => setTab('spin')}
             fromIdeaId={shrinkFrom}
-            clearFrom={() => setShrinkFrom(null)}
+            clearFrom={clearFrom}
           />
         )}
         {tab === 'spin' && <Spin state={state} flash={setFlash} />}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { AppState } from '../../shared/types';
+import type { AppState, ThemeChoice } from '../../shared/types';
 
 interface Props {
   state: AppState;
@@ -7,6 +7,12 @@ interface Props {
 }
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+const THEMES: { id: ThemeChoice; label: string }[] = [
+  { id: 'system', label: 'System' },
+  { id: 'dark', label: 'Dark' },
+  { id: 'light', label: 'Light' },
+];
 
 export default function Settings({ state, flash }: Props) {
   const s = state.settings;
@@ -25,6 +31,27 @@ export default function Settings({ state, flash }: Props) {
     <div className="wrap">
       <h1>Settings</h1>
       <p className="sub">Everything stays on this laptop. No account, no sync, no backend.</p>
+
+      <h2>Appearance</h2>
+      <div className="card">
+        <label className="field">
+          <span className="label">Theme</span>
+          <div className="seg-toggle">
+            {THEMES.map((t) => (
+              <button
+                key={t.id}
+                className={s.theme === t.id ? 'on' : ''}
+                onClick={() => void set({ theme: t.id })}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </label>
+        <p className="hint">
+          System follows macOS. Changes apply straight away, in every window.
+        </p>
+      </div>
 
       <h2>Weekly shrink reminder</h2>
       <div className="card">

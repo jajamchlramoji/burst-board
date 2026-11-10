@@ -29,7 +29,7 @@ function state(ships: Ship[]): AppState {
     burst: null,
     history: [],
     settings: {
-      notificationsEnabled: true, reminderEnabled: true, reminderDay: 0,
+      theme: 'dark', notificationsEnabled: true, reminderEnabled: true, reminderDay: 0,
       reminderTime: '10:00', lastReminderDate: null, globalHotkeyEnabled: true,
     },
   };

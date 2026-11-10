@@ -70,7 +70,11 @@ export interface BurstRecord {
   minutes: number;
 }
 
+/** "system" follows macOS; the other two override it. */
+export type ThemeChoice = 'system' | 'dark' | 'light';
+
 export interface Settings {
+  theme: ThemeChoice;
   notificationsEnabled: boolean;
   reminderEnabled: boolean;
   /** 0 = Sunday ... 6 = Saturday */

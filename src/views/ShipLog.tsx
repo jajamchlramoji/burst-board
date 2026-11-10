@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { AppState, Ship } from '../../shared/types';
 import { WHERE_LABELS } from '../../shared/types';
-import { burstDayCount, shipStreak, shipsThisMonth } from '../../shared/burst';
+import { burstDayCount, daysSinceLastBurst, shipStreak, shipsThisMonth } from '../../shared/burst';
 import { fmtDateTime } from '../lib/hooks';
 
 interface Props {
@@ -17,7 +17,28 @@ export default function ShipLog({ state, flash }: Props) {
   const streak = shipStreak(state.history);
   const month = shipsThisMonth(state.ships);
   const burstDays = burstDayCount(state.history);
+  const sinceLast = daysSinceLastBurst(state.history);
   const [editing, setEditing] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? shipped.filter((s) =>
+        [s.title, s.win, s.v2, s.liveIn2h, s.whereOther, ...s.urls]
+          .join(' ')
+          .toLowerCase()
+          .includes(q),
+      )
+    : shipped;
+
+  const lastBurstLabel =
+    sinceLast === null
+      ? null
+      : sinceLast === 0
+        ? 'Last burst today.'
+        : sinceLast === 1
+          ? 'Last burst yesterday.'
+          : `Last burst ${sinceLast} days ago.`;
 
   async function doExport() {
     const res = await window.burst.exportMarkdown();
@@ -48,24 +69,39 @@ export default function ShipLog({ state, flash }: Props) {
       </div>
 
       <p className="hint" style={{ marginTop: -12, marginBottom: 20 }}>
-        {burstDays} burst {burstDays === 1 ? 'day' : 'days'} logged. Days without a burst are
-        skipped, not counted against you - the streak only breaks on a burst day that shipped
-        nothing.
+        {burstDays} burst {burstDays === 1 ? 'day' : 'days'} logged.{' '}
+        {lastBurstLabel ? `${lastBurstLabel} ` : ''}Days without a burst are skipped, not counted
+        against you - the streak only breaks on a burst day that shipped nothing.
       </p>
 
       <div className="btn-row" style={{ marginBottom: 22 }}>
         <button className="btn" onClick={() => void doExport()} disabled={shipped.length === 0}>
           Export log as Markdown
         </button>
+        {shipped.length > 4 && (
+          <input
+            type="search"
+            value={query}
+            placeholder="Search ships…"
+            aria-label="Search the ship log"
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ maxWidth: 260 }}
+          />
+        )}
       </div>
 
-      {shipped.length === 0 ? (
+      {q && visible.length === 0 && shipped.length > 0 ? (
+        <div className="empty">
+          <strong>Nothing matches "{query}".</strong>
+          Every other ship is still there.
+        </div>
+      ) : shipped.length === 0 ? (
         <div className="empty">
           <strong>Nothing shipped yet.</strong>
           The first entry here is the hard one. After that it is just a list.
         </div>
       ) : (
-        shipped.map((s) => (
+        visible.map((s) => (
           <LogRow
             key={s.id}
             ship={s}

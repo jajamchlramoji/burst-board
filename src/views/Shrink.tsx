@@ -19,21 +19,22 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
   const full = active.length >= MAX_ACTIVE_SHIPS;
 
   const [ideaId, setIdeaId] = useState<string | null>(fromIdeaId);
-  const [title, setTitle] = useState('');
+  // The view unmounts on every tab switch, so "Shrink this idea" can seed the
+  // form at mount. FOMO ideas get the template title.
+  const [title, setTitle] = useState(() => {
+    const idea = fromIdeaId ? state.ideas.find((i) => i.id === fromIdeaId) : undefined;
+    return idea ? suggestedTitleFor(idea) : '';
+  });
   const [liveIn2h, setLiveIn2h] = useState('');
   const [where, setWhere] = useState<ShipWhere>('github');
   const [whereOther, setWhereOther] = useState('');
   const [uglyV1, setUglyV1] = useState('');
 
-  // Picking "Shrink" on an inbox idea prefills the form (FOMO gets the template title).
+  // Hand the request back so returning to this tab later starts blank. This
+  // only touches the parent, never local state.
   useEffect(() => {
-    if (!fromIdeaId) return;
-    const idea = state.ideas.find((i) => i.id === fromIdeaId);
-    setIdeaId(fromIdeaId);
-    if (idea) setTitle(suggestedTitleFor(idea));
-    clearFrom();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromIdeaId]);
+    if (fromIdeaId) clearFrom();
+  }, [fromIdeaId, clearFrom]);
 
   function pickIdea(id: string) {
     const idea = state.ideas.find((i) => i.id === id);

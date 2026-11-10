@@ -9,7 +9,7 @@
  * It runs against a throwaway userData directory, so your real board is never
  * touched.
  */
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, Menu, nativeTheme } = require('electron');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -109,6 +109,42 @@ app.whenReady().then(async () => {
   t('React app rendered under the sandbox', booted.brand);
   t('state loaded through the bridge', !booted.stillLoading);
   t('all five tabs present', booted.tabs.length >= 5, 'tabs=' + booted.tabs.join('|'));
+
+  // ---- theme plumbing: settings -> nativeTheme -> prefers-color-scheme -> CSS ----
+  nativeTheme.themeSource = 'dark';
+  await new Promise((r) => setTimeout(r, 250));
+  const darkBg = await js('getComputedStyle(document.body).backgroundColor');
+  nativeTheme.themeSource = 'light';
+  await new Promise((r) => setTimeout(r, 250));
+  const lightBg = await js('getComputedStyle(document.body).backgroundColor');
+  const lightText = await js('getComputedStyle(document.body).color');
+  t('dark theme paints the dark background', darkBg === 'rgb(11, 13, 18)', darkBg);
+  t('light theme repaints from the light palette', lightBg === 'rgb(245, 247, 251)', lightBg);
+  t('light theme uses dark text', lightText === 'rgb(20, 26, 40)', lightText);
+  nativeTheme.themeSource = 'dark';
+
+  await js("window.burst.settings.update({ theme: 'light' })");
+  t('a theme choice is stored', store.get().settings.theme === 'light');
+  await js("window.burst.settings.update({ theme: 'chartreuse' })");
+  t('a bogus theme is rejected', store.get().settings.theme === 'light',
+    'theme=' + store.get().settings.theme);
+
+  // ---- the application menu ----
+  const { buildAppMenu } = require(path.join(ROOT, 'dist-electron/electron/menu.js'));
+  buildAppMenu({
+    openCapture: () => {}, startBurst: () => {}, showMain: () => {},
+    exportMarkdown: () => {}, dataFile: () => DATA,
+  });
+  const menu = Menu.getApplicationMenu();
+  const top = menu.items.map((m) => m.label || m.role);
+  // A custom menu replaces Electron's default one, and copy/paste/undo live in
+  // the Edit role. Losing it makes every text field unusable.
+  t('menu keeps an Edit menu, so copy and paste still work',
+    menu.items.some((m) => m.role === 'editMenu' || /^edit$/i.test(m.label)), 'top=' + top.join(','));
+  t('menu has the Burst and Go sections', top.includes('Burst') && top.includes('Go'));
+  const go = menu.items.find((m) => m.label === 'Go');
+  t('Go has a shortcut for each of the five tabs',
+    go.submenu.items.filter((i) => /^(CmdOrCtrl|Command)\+[1-5]$/.test(i.accelerator || '')).length === 5);
 
   // ---- ship:update allowlist: the invariant must hold ----
   await js(`window.burst.ships.update('ship-1', { status: 'shipped', shippedAt: '2020-01-01T00:00:00.000Z', urls: ['http://localhost:3000'] })`);

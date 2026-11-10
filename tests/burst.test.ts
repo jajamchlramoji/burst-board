@@ -7,6 +7,7 @@ import {
   SCOPE_END_MS,
   SHIP_CHECKPOINT_MS,
   burstDayCount,
+  daysSinceLastBurst,
   elapsedMs,
   formatClock,
   formatShort,
@@ -133,6 +134,32 @@ describe('shipStreak - days without a burst never break it', () => {
   it('sorts days chronologically across a month and year boundary', () => {
     const h = [record('2025-12-31', 'shipped'), record('2026-01-01', 'shipped')];
     expect(shipStreak(h)).toBe(2);
+  });
+});
+
+describe('daysSinceLastBurst', () => {
+  it('is null with no history, so the UI can say nothing', () => {
+    expect(daysSinceLastBurst([])).toBe(null);
+  });
+  it('is 0 on the day of the last burst', () => {
+    expect(daysSinceLastBurst([record('2026-11-10', 'shipped')], new Date('2026-11-10T23:00:00'))).toBe(0);
+  });
+  it('is 1 the next day', () => {
+    expect(daysSinceLastBurst([record('2026-11-10', 'shipped')], new Date('2026-11-11T01:00:00'))).toBe(1);
+  });
+  it('measures from the most recent burst, whatever the order', () => {
+    const h = [record('2026-10-01', 'shipped'), record('2026-11-08', 'parked')];
+    expect(daysSinceLastBurst(h, new Date('2026-11-10T12:00:00'))).toBe(2);
+  });
+  it('counts across a month boundary', () => {
+    expect(daysSinceLastBurst([record('2026-10-30', 'shipped')], new Date('2026-11-02T12:00:00'))).toBe(3);
+  });
+  it('is unaffected by daylight saving, since it compares local midnights', () => {
+    // US DST ended 2026-11-01; a naive hour-based diff would read 29 or 31 days.
+    expect(daysSinceLastBurst([record('2026-10-25', 'shipped')], new Date('2026-11-24T12:00:00'))).toBe(30);
+  });
+  it('never goes negative if a record is dated in the future', () => {
+    expect(daysSinceLastBurst([record('2026-12-01', 'shipped')], new Date('2026-11-10T12:00:00'))).toBe(0);
   });
 });
 

@@ -98,6 +98,20 @@ export function shipsThisMonth(ships: Ship[], now: Date = new Date()): number {
   }).length;
 }
 
+/**
+ * Whole days since the most recent burst day, or null with no history at all.
+ * The streak deliberately ignores quiet days, which means it keeps showing a
+ * number long after you last used the app - this is what gives it context.
+ */
+export function daysSinceLastBurst(history: BurstRecord[], now: Date = new Date()): number | null {
+  if (history.length === 0) return null;
+  const latest = [...history.map((r) => localDay(r.startedAt))].sort().reverse()[0];
+  if (!latest) return null;
+  const then = Date.parse(`${latest}T00:00:00`);
+  const today = Date.parse(`${localDay(now.toISOString())}T00:00:00`);
+  return Math.max(0, Math.round((today - then) / 86_400_000));
+}
+
 export function burstDayCount(history: BurstRecord[]): number {
   return new Set(history.map((r) => localDay(r.startedAt))).size;
 }

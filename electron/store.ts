@@ -8,6 +8,7 @@ const STATE_VERSION = 2;
 
 function defaultSettings(): Settings {
   return {
+    theme: 'dark',
     notificationsEnabled: true,
     reminderEnabled: true,
     reminderDay: 0, // Sunday

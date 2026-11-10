@@ -199,10 +199,34 @@ To test it without waiting for Sunday:
       → Refused: a shipped link has to be public. `example.com/thing` is accepted and
       stored as `https://example.com/thing`.
 
+### Appearance and shortcuts
+
+- [ ] **Settings → Appearance → Light.**
+      → The whole app turns light immediately: window, cards, pills, buttons, all readable.
+      Open **Quick capture** and the **mini timer** — both light too.
+- [ ] Switch to **System**, then change macOS between light and dark appearance.
+      → The app follows along without a restart.
+- [ ] Back to **Dark** if that is what you want day to day. The choice is remembered.
+- [ ] Press ⌘1 through ⌘5. → Inbox, Shrink, Spin, Burst, Ship log.
+- [ ] Press ⌘, → Settings. Press ⌘B → the spin wheel (or the running burst).
+- [ ] Click into any text field and use ⌘C / ⌘V / ⌘Z.
+      → Copy, paste and undo all work. (Worth checking: a custom menu can break these.)
+- [ ] **Burst → Reveal data file in Finder** → Finder opens with the JSON file selected.
+
+### Ship log search
+
+- [ ] With more than four ships logged, a **Search ships…** box appears next to the export
+      button. Type part of a title, a win, or a URL.
+      → Only matching ships are listed; clearing the box brings them all back.
+- [ ] Type something that matches nothing.
+      → "Nothing matches…" with a reassurance that the rest are still there.
+- [ ] The streak line reads **"Last burst today"** / **"yesterday"** / **"N days ago"**, so the
+      streak number has context.
+
 ### Automated checks
 
-- [ ] `npm run verify` → typecheck passes, then **81 unit tests** and **29 integration
-      checks** all pass. Worth running before you package a build.
+- [ ] `npm run verify` → typecheck and ESLint pass, then **88 unit tests** and **37
+      integration checks** all pass. Worth running before you package a build.
 
 ---
 

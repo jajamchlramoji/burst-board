@@ -102,7 +102,8 @@ Other commands, if you want them:
 | `npm run typecheck` | Check TypeScript for mistakes |
 | `npm test` | Run the unit tests (fast, no app needed) |
 | `npm run test:electron` | Build, then run the app's integration smoke test |
-| `npm run verify` | Typecheck + both test suites. Run this before packaging |
+| `npm run lint` | ESLint over everything |
+| `npm run verify` | Typecheck + lint + both test suites. Run this before packaging |
 | `npm run icon` | Regenerate the app icon |
 
 ---
@@ -201,6 +202,27 @@ the day and time are in **Settings**.
 
 ---
 
+### Appearance
+
+**Settings → Appearance** switches between **System**, **Dark** and **Light**. System follows
+macOS. The whole app is driven by two palettes of CSS variables, so a change applies instantly
+in every window, including the capture box and the mini timer.
+
+### Keyboard shortcuts
+
+| Key | Does |
+| --- | --- |
+| ⌘⇧B | Capture an idea, from anywhere on the Mac (global) |
+| ⌘B | Start a burst |
+| ⌘1 … ⌘5 | Inbox, Shrink, Spin, Burst, Ship log |
+| ⌘, | Settings |
+| ⌘E | Export the ship log |
+
+The menu bar ⚡ icon has **Capture idea** and **Start burst** too, and shows the time left in a
+running burst.
+
+---
+
 ## 6. Project layout
 
 ```
@@ -223,7 +245,7 @@ burst-board/
 │   ├── App.tsx        Tabs and shell
 │   └── views/         Inbox, Shrink, Spin, Burst, ShipLog, Settings, Capture, Mini
 ├── scripts/           Icon generator
-├── tests/             Unit tests + an Electron integration smoke test
+├── tests/             88 unit tests + a 37-check Electron smoke test
 └── release/           Built installer lands here
 ```
 
@@ -242,6 +264,21 @@ UI cannot touch your filesystem directly — it goes through a narrow, explicit 
   of IP address and URLs carrying credentials are all refused. `shared/url.ts` has the rule and
   `tests/url.test.ts` pins it.
 - **Nothing is bundled but React.** `npm audit --omit=dev` reports zero vulnerabilities.
+
+### Tests
+
+```bash
+npm run verify
+```
+
+Typecheck, ESLint, **88 unit tests** over the burst timing, the streak rule, what counts as a
+public link and the Markdown output, then a **37-check Electron smoke test** that runs the real
+preload in a sandboxed window against a throwaway data directory. That last one is the useful
+one: it proves the UI still boots, both themes paint, the Edit menu still exists so copy and
+paste work, and the input rules actually refuse what they claim to.
+
+GitHub Actions runs typecheck, lint and the unit tests on every push. The Electron test needs a
+real display, so it stays local - run `npm run verify` before packaging a build.
 
 ---
 
