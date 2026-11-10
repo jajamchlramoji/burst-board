@@ -2,8 +2,8 @@
   "name": "burst-board",
   "productName": "Burst Board",
   "version": "1.0.0",
-  "description": "Turn ideas into one-burst ships. Local-only, offline desktop app.",
-  "author": "Burst Board",
+  "description": "Turn ideas into one-burst ships. Local-only, offline macOS desktop app.",
+  "author": "Ramoji",
   "private": true,
   "main": "dist-electron/electron/main.js",
   "scripts": {
