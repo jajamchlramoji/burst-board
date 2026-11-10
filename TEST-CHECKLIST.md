@@ -162,6 +162,23 @@ To test it without waiting for Sunday:
       → Readable JSON containing your ideas, ships, history and settings.
 - [ ] Quit and reopen the app. → Everything is still there.
 
+### Your data is protected
+
+- [ ] With the app running, open it a second time (double-click it in Applications,
+      or run `open -n "/Applications/Burst Board.app"`).
+      → No second window and no second menu bar icon. The copy already running
+      comes to the front instead. Two copies can never fight over your data.
+- [ ] Quit the app. In the data folder you should now see
+      `burst-board-data.json.bak` beside the main file.
+      → That is your board as of the last launch, refreshed every time the app starts.
+- [ ] **Recovery drill** (worth doing once, so you trust it). Quit the app. Open
+      `burst-board-data.json` in TextEdit, delete half the text, and save - a deliberately
+      broken file. Reopen the app.
+      → Your ships, history and streak are all still there, recovered from the backup.
+      → A `burst-board-data.json.corrupt-<timestamp>` file appears, holding the broken
+      version, so nothing is ever silently thrown away.
+- [ ] Delete the `.corrupt-` file when you are done - it is just evidence.
+
 ---
 
 ## If something goes wrong

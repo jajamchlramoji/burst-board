@@ -112,8 +112,22 @@ One file:
 ~/Library/Application Support/Burst Board/burst-board-data.json
 ```
 
-Plain JSON. Back it up by copying it. Delete it to start over. The app shows this path under
-**Settings → Your data**.
+Plain JSON. Delete it to start over. The app shows this path under **Settings → Your data**.
+
+Beside it, the app keeps a safety copy:
+
+```
+~/Library/Application Support/Burst Board/burst-board-data.json.bak
+```
+
+That copy is refreshed every time the app starts and loads your data successfully, so it holds
+your board as of the last launch. If the live file is ever unreadable - a crash mid-write, a
+hand-edit gone wrong - the app recovers from the backup on the next start, and keeps the broken
+file as `burst-board-data.json.corrupt-<timestamp>` so nothing is thrown away. You will see a
+line about the recovery in the console.
+
+Only one copy of Burst Board runs at a time. Launching it again just brings the running one to
+the front, so two copies can never write over each other's data.
 
 ---
 
