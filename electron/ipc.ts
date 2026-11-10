@@ -1,53 +1,38 @@
 import { BrowserWindow, ipcMain, shell } from 'electron';
 import { Store } from './store';
-import { elapsedMs } from '../shared/burst';
+import { BURST_END_MS, elapsedMs } from '../shared/burst';
+import { isPublicUrl, normalizeUrl } from '../shared/url';
+import type { ExportResult, Reply } from '../shared/api';
 import type {
   AppState,
   BurstOutcome,
   Idea,
+  IdeaStatus,
   IdeaTag,
+  Settings,
   Ship,
   ShipWhere,
-  Settings,
 } from '../shared/types';
-import { FOMO_TEMPLATE, MAX_ACTIVE_SHIPS } from '../shared/types';
+import { FOMO_TEMPLATE, MAX_ACTIVE_SHIPS, WHERE_LABELS } from '../shared/types';
 
-export type Reply<T = AppState> = { ok: true; state: AppState; value?: T } | { ok: false; error: string };
+export type { Reply };
 
-/** Hooks the main process provides; phase-2 features plug in here. */
+/** Hooks the main process provides. */
 export interface IpcHooks {
   broadcast: () => void;
   openCapture?: () => void;
   closeCapture?: () => void;
   setMiniTimer?: (on: boolean) => void;
-  exportMarkdown?: () => Promise<string | null>;
+  exportMarkdown?: () => Promise<ExportResult>;
   refreshTray?: () => void;
   applyHotkey?: () => void;
   startBurstFlow?: () => void;
 }
 
-export function isPublicUrl(raw: string): boolean {
-  const text = raw.trim();
-  if (!text) return false;
-  let u: URL;
-  try {
-    u = new URL(text.includes('://') ? text : `https://${text}`);
-  } catch {
-    return false;
-  }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
-  const host = u.hostname.toLowerCase();
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return false;
-  if (host === '127.0.0.1' || host === '::1' || host === '0.0.0.0') return false;
-  if (/^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
-  if (!host.includes('.')) return false;
-  return true;
-}
+export { isPublicUrl, normalizeUrl };
 
-export function normalizeUrl(raw: string): string {
-  const text = raw.trim();
-  return text.includes('://') ? text : `https://${text}`;
-}
+/** A burst left running this long past 4:00 is yesterday's - close it out. */
+export const STALE_GRACE_MS = 30 * 60 * 1000;
 
 export function suggestedTitle(idea: Pick<Idea, 'text' | 'tag'>): string {
   return idea.tag === 'fomo' ? FOMO_TEMPLATE(idea.text.trim()) : idea.text.trim();
@@ -57,11 +42,111 @@ function activeCount(state: AppState): number {
   return state.ships.filter((s) => s.status === 'active').length;
 }
 
+function str(v: unknown): string | undefined {
+  return typeof v === 'string' ? v : undefined;
+}
+
+/**
+ * Patches arrive from the renderer as plain objects; `Partial<T>` is only a
+ * compile-time promise. Each field is copied across explicitly so a patch can
+ * never reach a field with its own rules - a ship cannot be marked shipped
+ * without a public URL, for instance.
+ */
+function ideaPatch(raw: unknown): Partial<Idea> {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  const out: Partial<Idea> = {};
+  const text = str(p.text)?.trim();
+  if (text) out.text = text;
+  const link = str(p.sourceLink);
+  if (link !== undefined) out.sourceLink = link.trim();
+  if (p.tag === 'own' || p.tag === 'fomo') out.tag = p.tag as IdeaTag;
+  if (p.status === 'inbox' || p.status === 'shrunk') out.status = p.status as IdeaStatus;
+  return out;
+}
+
+function shipPatch(raw: unknown): Partial<Ship> {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  const out: Partial<Ship> = {};
+  const title = str(p.title)?.trim();
+  if (title) out.title = title;
+  const live = str(p.liveIn2h)?.trim();
+  if (live) out.liveIn2h = live;
+  if (typeof p.where === 'string' && p.where in WHERE_LABELS) {
+    out.where = p.where as ShipWhere;
+  }
+  for (const key of ['whereOther', 'uglyV1', 'win', 'v2'] as const) {
+    const v = str(p[key]);
+    if (v !== undefined) out[key] = v;
+  }
+  return out;
+}
+
+function settingsPatch(raw: unknown): Partial<Settings> {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  const out: Partial<Settings> = {};
+  for (const key of ['notificationsEnabled', 'reminderEnabled', 'globalHotkeyEnabled'] as const) {
+    if (typeof p[key] === 'boolean') out[key] = p[key] as boolean;
+  }
+  if (Number.isInteger(p.reminderDay)) {
+    const d = p.reminderDay as number;
+    if (d >= 0 && d <= 6) out.reminderDay = d;
+  }
+  const time = str(p.reminderTime)?.trim();
+  if (time) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(time);
+    if (m) {
+      const h = Number(m[1]);
+      const min = Number(m[2]);
+      if (h <= 23 && min <= 59) out.reminderTime = `${String(h).padStart(2, '0')}:${m[2]}`;
+    }
+  }
+  if (p.lastReminderDate === null || typeof p.lastReminderDate === 'string') {
+    out.lastReminderDate = p.lastReminderDate as string | null;
+  }
+  return out;
+}
+
+/**
+ * Close out the running burst and write it to the history. Shared by the
+ * "End burst" button and by the stale-burst cleanup on launch and on wake, so
+ * a burst can never vanish without being recorded.
+ */
+export function finishBurst(store: Store, outcome: BurstOutcome, now = Date.now()): boolean {
+  const state = store.get();
+  const burst = state.burst;
+  if (!burst) return false;
+  const ship = state.ships.find((x) => x.id === burst.shipId);
+  const resolved: BurstOutcome = burst.shipped ? 'shipped' : outcome;
+  // Capped: a burst that ran while the laptop slept should not log 19 hours.
+  const minutes = Math.min(
+    Math.round(elapsedMs(burst, now) / 60000),
+    Math.round(BURST_END_MS / 60000),
+  );
+  store.update((s) => {
+    s.history.unshift({
+      id: burst.id,
+      shipId: burst.shipId,
+      shipTitle: ship?.title ?? 'Untitled ship',
+      startedAt: burst.startedAt,
+      endedAt: new Date(now).toISOString(),
+      outcome: resolved,
+      minutes,
+    });
+    const target = s.ships.find((x) => x.id === burst.shipId);
+    if (target && resolved === 'parked' && target.status === 'active') {
+      target.status = 'parked';
+    }
+    s.burst = null;
+  });
+  store.saveNow();
+  return true;
+}
+
 export function registerIpc(store: Store, hooks: IpcHooks): void {
-  const ok = (value?: unknown): Reply => {
+  const ok = (): Reply => {
     hooks.broadcast();
     hooks.refreshTray?.();
-    return { ok: true, state: store.get(), value: value as AppState | undefined };
+    return { ok: true, state: store.get() };
   };
   const fail = (error: string): Reply => ({ ok: false, error });
 
@@ -69,30 +154,31 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
   ipcMain.handle('app:dataFile', () => store.dataFile);
 
   // ---------- Inbox ----------
-  ipcMain.handle(
-    'idea:add',
-    (_e, input: { text: string; sourceLink?: string; tag?: IdeaTag }): Reply => {
-      const text = (input.text ?? '').trim();
-      if (!text) return fail('An idea needs at least a few words.');
-      const idea: Idea = {
-        id: Store.id(),
-        text,
-        sourceLink: (input.sourceLink ?? '').trim(),
-        tag: input.tag === 'fomo' ? 'fomo' : 'own',
-        status: 'inbox',
-        createdAt: new Date().toISOString(),
-      };
-      store.update((s) => {
-        s.ideas.unshift(idea);
-      });
-      return ok();
-    },
-  );
+  ipcMain.handle('idea:add', (_e, input: unknown): Reply => {
+    const p = (input ?? {}) as Record<string, unknown>;
+    const text = (str(p.text) ?? '').trim();
+    if (!text) return fail('An idea needs at least a few words.');
+    const idea: Idea = {
+      id: Store.id(),
+      text,
+      sourceLink: (str(p.sourceLink) ?? '').trim(),
+      tag: p.tag === 'fomo' ? 'fomo' : 'own',
+      status: 'inbox',
+      createdAt: new Date().toISOString(),
+    };
+    store.update((s) => {
+      s.ideas.unshift(idea);
+    });
+    return ok();
+  });
 
-  ipcMain.handle('idea:update', (_e, input: { id: string; patch: Partial<Idea> }): Reply => {
+  ipcMain.handle('idea:update', (_e, input: { id: string; patch: unknown }): Reply => {
+    const patch = ideaPatch(input?.patch);
+    const found = store.get().ideas.some((i) => i.id === input?.id);
+    if (!found) return fail('That idea is gone.');
     store.update((s) => {
       const idea = s.ideas.find((i) => i.id === input.id);
-      if (idea) Object.assign(idea, input.patch);
+      if (idea) Object.assign(idea, patch);
     });
     return ok();
   });
@@ -105,58 +191,54 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
   });
 
   // ---------- Shrink ----------
-  ipcMain.handle(
-    'ship:create',
-    (
-      _e,
-      input: {
-        ideaId: string | null;
-        title: string;
-        liveIn2h: string;
-        where: ShipWhere;
-        whereOther?: string;
-        uglyV1?: string;
-      },
-    ): Reply => {
-      const title = (input.title ?? '').trim();
-      const liveIn2h = (input.liveIn2h ?? '').trim();
-      if (!title) return fail('Give the ship a short title.');
-      if (!liveIn2h) return fail('"What will be live in 2 hours?" is required.');
-      if (activeCount(store.get()) >= MAX_ACTIVE_SHIPS) {
-        return fail(
-          `You already have ${MAX_ACTIVE_SHIPS} active ships. Park one first - five is the ceiling on purpose.`,
-        );
+  ipcMain.handle('ship:create', (_e, input: unknown): Reply => {
+    const p = (input ?? {}) as Record<string, unknown>;
+    const title = (str(p.title) ?? '').trim();
+    const liveIn2h = (str(p.liveIn2h) ?? '').trim();
+    if (!title) return fail('Give the ship a short title.');
+    if (!liveIn2h) return fail('"What will be live in 2 hours?" is required.');
+    if (activeCount(store.get()) >= MAX_ACTIVE_SHIPS) {
+      return fail(
+        `You already have ${MAX_ACTIVE_SHIPS} active ships. Park one first - five is the ceiling on purpose.`,
+      );
+    }
+    const where =
+      typeof p.where === 'string' && p.where in WHERE_LABELS
+        ? (p.where as ShipWhere)
+        : 'github';
+    const ideaId = str(p.ideaId) ?? null;
+    const ship: Ship = {
+      id: Store.id(),
+      ideaId,
+      title,
+      liveIn2h,
+      where,
+      whereOther: (str(p.whereOther) ?? '').trim(),
+      uglyV1: (str(p.uglyV1) ?? '').trim(),
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      shippedAt: null,
+      urls: [],
+      win: '',
+      v2: '',
+    };
+    store.update((s) => {
+      s.ships.unshift(ship);
+      if (ideaId) {
+        const idea = s.ideas.find((i) => i.id === ideaId);
+        if (idea) idea.status = 'shrunk';
       }
-      const ship: Ship = {
-        id: Store.id(),
-        ideaId: input.ideaId ?? null,
-        title,
-        liveIn2h,
-        where: input.where ?? 'github',
-        whereOther: (input.whereOther ?? '').trim(),
-        uglyV1: (input.uglyV1 ?? '').trim(),
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        shippedAt: null,
-        urls: [],
-        win: '',
-        v2: '',
-      };
-      store.update((s) => {
-        s.ships.unshift(ship);
-        if (input.ideaId) {
-          const idea = s.ideas.find((i) => i.id === input.ideaId);
-          if (idea) idea.status = 'shrunk';
-        }
-      });
-      return ok();
-    },
-  );
+    });
+    return ok();
+  });
 
-  ipcMain.handle('ship:update', (_e, input: { id: string; patch: Partial<Ship> }): Reply => {
+  ipcMain.handle('ship:update', (_e, input: { id: string; patch: unknown }): Reply => {
+    const patch = shipPatch(input?.patch);
+    const found = store.get().ships.some((x) => x.id === input?.id);
+    if (!found) return fail('That ship is gone.');
     store.update((s) => {
       const ship = s.ships.find((x) => x.id === input.id);
-      if (ship) Object.assign(ship, input.patch);
+      if (ship) Object.assign(ship, patch);
     });
     return ok();
   });
@@ -181,15 +263,22 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
   });
 
   ipcMain.handle('ship:delete', (_e, id: string): Reply => {
+    // A burst on this ship has to be closed out first, or its mini timer is
+    // left floating on screen and the burst never reaches the history.
+    if (store.get().burst?.shipId === id) {
+      finishBurst(store, 'parked');
+      hooks.setMiniTimer?.(false);
+    }
     store.update((s) => {
       s.ships = s.ships.filter((x) => x.id !== id);
-      if (s.burst?.shipId === id) s.burst = null;
     });
     return ok();
   });
 
   ipcMain.handle('ship:addUrl', (_e, input: { id: string; url: string }): Reply => {
-    if (!isPublicUrl(input.url)) return fail('That needs to be a public http(s) URL.');
+    if (!isPublicUrl(input?.url ?? '')) {
+      return fail('That needs to be a public http(s) link - a domain, not localhost or an IP.');
+    }
     const url = normalizeUrl(input.url);
     store.update((s) => {
       const ship = s.ships.find((x) => x.id === input.id);
@@ -199,6 +288,9 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
         ship.status = 'shipped';
         ship.shippedAt = new Date().toISOString();
       }
+      // Keep a running burst in step. Without this the 2:00 checkpoint keeps
+      // demanding a link for something already live, and the burst logs parked.
+      if (s.burst?.shipId === ship.id) s.burst.shipped = true;
     });
     return ok();
   });
@@ -228,6 +320,7 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
         firedCheckpoint: false,
         firedLogPrompt: false,
         miniTimer: false,
+        snoozeUntil: null,
       };
     });
     return ok();
@@ -251,13 +344,14 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
   });
 
   ipcMain.handle('burst:shipNow', (_e, url: string): Reply => {
-    if (!isPublicUrl(url)) {
+    if (!isPublicUrl(url ?? '')) {
       return fail('Paste a public http(s) link - that is what makes it shipped.');
     }
     const clean = normalizeUrl(url);
     store.update((s) => {
       if (!s.burst) return;
       s.burst.shipped = true;
+      s.burst.snoozeUntil = null;
       const ship = s.ships.find((x) => x.id === s.burst!.shipId);
       if (ship) {
         if (!ship.urls.includes(clean)) ship.urls.push(clean);
@@ -282,53 +376,46 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
     return ok();
   });
 
+  ipcMain.handle('burst:snooze', (_e, minutes: unknown): Reply => {
+    // snooze(0) clears it - that is the "Ship it now" button bringing the
+    // checkpoint straight back.
+    const raw = typeof minutes === 'number' && Number.isFinite(minutes) ? minutes : 5;
+    const mins = Math.min(raw, 60);
+    store.update((s) => {
+      if (!s.burst) return;
+      s.burst.snoozeUntil =
+        mins > 0 ? new Date(Date.now() + mins * 60_000).toISOString() : null;
+    });
+    return ok();
+  });
+
   ipcMain.handle('burst:setMini', (_e, on: boolean): Reply => {
     store.update((s) => {
-      if (s.burst) s.burst.miniTimer = on;
+      if (s.burst) s.burst.miniTimer = Boolean(on);
     });
-    hooks.setMiniTimer?.(on);
+    hooks.setMiniTimer?.(Boolean(on));
     return ok();
   });
 
   ipcMain.handle('burst:end', (_e, outcome: BurstOutcome): Reply => {
-    const state = store.get();
-    if (!state.burst) return fail('No burst running.');
-    const burst = state.burst;
-    const ship = state.ships.find((x) => x.id === burst.shipId);
-    const minutes = Math.round(elapsedMs(burst) / 60000);
-    const resolved: BurstOutcome = burst.shipped ? 'shipped' : outcome;
-    store.update((s) => {
-      s.history.unshift({
-        id: burst.id,
-        shipId: burst.shipId,
-        shipTitle: ship?.title ?? 'Untitled ship',
-        startedAt: burst.startedAt,
-        endedAt: new Date().toISOString(),
-        outcome: resolved,
-        minutes,
-      });
-      const target = s.ships.find((x) => x.id === burst.shipId);
-      if (target && resolved === 'parked' && target.status === 'active') {
-        target.status = 'parked';
-      }
-      s.burst = null;
-    });
+    const resolved: BurstOutcome = outcome === 'shipped' ? 'shipped' : 'parked';
+    if (!finishBurst(store, resolved)) return fail('No burst running.');
     hooks.setMiniTimer?.(false);
-    store.saveNow();
     return ok();
   });
 
   // ---------- Settings & misc ----------
-  ipcMain.handle('settings:update', (_e, patch: Partial<Settings>): Reply => {
+  ipcMain.handle('settings:update', (_e, patch: unknown): Reply => {
+    const clean = settingsPatch(patch);
     store.update((s) => {
-      Object.assign(s.settings, patch);
+      Object.assign(s.settings, clean);
     });
     hooks.applyHotkey?.();
     return ok();
   });
 
   ipcMain.handle('shell:open', async (_e, url: string) => {
-    if (!isPublicUrl(url)) return false;
+    if (!isPublicUrl(url ?? '')) return false;
     await shell.openExternal(normalizeUrl(url));
     return true;
   });
@@ -342,7 +429,7 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
   });
 
   ipcMain.handle('export:markdown', async () => {
-    return (await hooks.exportMarkdown?.()) ?? null;
+    return (await hooks.exportMarkdown?.()) ?? { ok: false, error: 'Export is unavailable.' };
   });
 }
 

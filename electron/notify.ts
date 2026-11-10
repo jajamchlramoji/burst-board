@@ -58,7 +58,9 @@ export function startScheduler(store: Store, deps: NotifyDeps): () => void {
     }
 
     // --- Weekly shrink reminder ---
-    if (settings.reminderEnabled) {
+    // Needs both switches: the burst nudges already check notificationsEnabled,
+    // and this one used to fire regardless of it.
+    if (settings.reminderEnabled && settings.notificationsEnabled) {
       const now = new Date();
       const key = todayKey(now);
       const [h, m] = settings.reminderTime.split(':').map((n) => Number(n));

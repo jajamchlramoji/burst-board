@@ -100,6 +100,9 @@ Other commands, if you want them:
 | `npm run build` | Compile only, no installer |
 | `npm start` | Compile, then run the production build |
 | `npm run typecheck` | Check TypeScript for mistakes |
+| `npm test` | Run the unit tests (fast, no app needed) |
+| `npm run test:electron` | Build, then run the app's integration smoke test |
+| `npm run verify` | Typecheck + both test suites. Run this before packaging |
 | `npm run icon` | Regenerate the app icon |
 
 ---
@@ -169,8 +172,19 @@ A big **Spin** button picks a random active ship. You get **one re-spin**, then 
 Pause or end at any point. Ending without shipping is **parked** — not failed. The app never
 says anything about it.
 
-The timer survives quitting the app: it runs on wall-clock time, so closing the laptop or
-restarting does not lose your burst.
+The timer survives quitting the app: it runs on wall-clock time, so restarting does not lose
+your burst.
+
+**Sleep does not count.** If you shut the lid, the time your Mac spends asleep is treated
+exactly like pressing Pause, so a lunch break or an overnight gap does not eat your four hours.
+
+**A burst left running gets closed out.** If one is still open more than half an hour past 4:00
+- you forgot it overnight, say - the app logs it on the next launch (or on wake) and clears it,
+so tomorrow's burst can start. It goes to the ship log as **parked**, or as **shipped** if you
+had already shipped, and its length is capped at four hours. Nothing disappears unrecorded.
+
+**"5 more minutes" sticks.** Snoozing the ship checkpoint is remembered on the burst itself, so
+switching tabs or restarting the app does not bring the modal straight back.
 
 ### Ship log
 Every entry holds the title, date, public URL(s), a one-line win, and a one-line "possible v2".
@@ -199,16 +213,35 @@ burst-board/
 │   ├── tray.ts        Menu bar icon
 │   ├── notify.ts      Notifications + the weekly reminder
 │   └── preload.ts     The safe bridge between the UI and the main process
-├── shared/            Types and burst timing shared by both sides
+├── shared/            Pure logic shared by both sides - no Electron, so it is testable
+│   ├── types.ts       The data model
+│   ├── burst.ts       Burst timing, phases and the streak rule
+│   ├── url.ts         What counts as a public link
+│   ├── markdown.ts    Ship log as Markdown
+│   └── api.ts         The one definition of the UI <-> main process contract
 ├── src/               React UI
 │   ├── App.tsx        Tabs and shell
 │   └── views/         Inbox, Shrink, Spin, Burst, ShipLog, Settings, Capture, Mini
 ├── scripts/           Icon generator
+├── tests/             Unit tests + an Electron integration smoke test
 └── release/           Built installer lands here
 ```
 
-Security: the renderer runs with `contextIsolation` on and `nodeIntegration` off, so the UI
-cannot touch your filesystem directly — it goes through a narrow, explicit API.
+### Security
+
+Every window runs with `contextIsolation` on, `nodeIntegration` off and `sandbox` on, so the
+UI cannot touch your filesystem directly — it goes through a narrow, explicit API listed in
+`shared/api.ts`. On top of that:
+
+- **Navigation is blocked.** A window can never leave the app; links open in your real browser.
+  Without this, a page the window navigated to would inherit that API.
+- **Every action validates its own input.** The UI sends a change, not a command: a ship cannot
+  be marked shipped without a public link, and unknown or malformed settings are discarded
+  rather than stored.
+- **A link has to be public to count.** localhost, `.local`, private network ranges, every form
+  of IP address and URLs carrying credentials are all refused. `shared/url.ts` has the rule and
+  `tests/url.test.ts` pins it.
+- **Nothing is bundled but React.** `npm audit --omit=dev` reports zero vulnerabilities.
 
 ---
 

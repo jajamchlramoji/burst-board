@@ -1,7 +1,7 @@
 /** Shared data model. Used by both the Electron main process and the React UI. */
 
 export type IdeaTag = 'own' | 'fomo';
-export type IdeaStatus = 'inbox' | 'shrunk' | 'archived';
+export type IdeaStatus = 'inbox' | 'shrunk';
 
 export interface Idea {
   id: string;
@@ -49,6 +49,12 @@ export interface BurstSession {
   firedCheckpoint: boolean;
   firedLogPrompt: boolean;
   miniTimer: boolean;
+  /**
+   * ISO time until which the ship checkpoint stays hidden ("5 more minutes").
+   * Stored on the session, not in the view, so it survives a tab switch and a
+   * restart instead of snapping straight back.
+   */
+  snoozeUntil: string | null;
 }
 
 export type BurstOutcome = 'shipped' | 'parked';

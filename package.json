@@ -16,7 +16,11 @@
     "icon": "node scripts/make-icon.mjs",
     "start": "npm run build && electron .",
     "dist:mac": "npm run icon && npm run build && electron-builder --mac --arm64",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:electron": "npm run build && electron tests/electron-smoke.cjs",
+    "verify": "npm run typecheck && npm run test && npm run test:electron"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
@@ -29,6 +33,7 @@
     "rimraf": "^6.0.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
+    "vitest": "^3.2.7",
     "wait-on": "^8.0.1"
   },
   "dependencies": {

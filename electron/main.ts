@@ -1,7 +1,8 @@
-import { BrowserWindow, app, globalShortcut, nativeTheme, shell } from 'electron';
+import { BrowserWindow, app, globalShortcut, nativeTheme, powerMonitor, screen, shell } from 'electron';
 import path from 'node:path';
 import { Store } from './store';
-import { broadcastState, registerIpc } from './ipc';
+import { STALE_GRACE_MS, broadcastState, finishBurst, registerIpc } from './ipc';
+import { BURST_END_MS, elapsedMs } from '../shared/burst';
 import { exportMarkdown } from './export';
 import { startScheduler } from './notify';
 import { createTray, refreshTray } from './tray';
@@ -25,6 +26,39 @@ let miniWindow: BrowserWindow | null = null;
 const hasInstanceLock = app.requestSingleInstanceLock();
 if (!hasInstanceLock) app.quit();
 
+/** Renderer settings every window shares. Sandboxed: the preload only needs
+ *  contextBridge and ipcRenderer, both of which work inside the sandbox. */
+function rendererPrefs() {
+  return {
+    preload: PRELOAD,
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: true,
+  } as const;
+}
+
+/**
+ * The preload is attached to every window, so a window that navigated to a
+ * remote page would hand that page the entire burst API. Nothing in this app
+ * navigates: links go to the real browser instead.
+ */
+function harden(win: BrowserWindow): void {
+  const devOrigin = DEV_URL ? new URL(DEV_URL).origin : null;
+  win.webContents.on('will-navigate', (event, url) => {
+    const internal =
+      url.startsWith('file://') || (devOrigin !== null && url.startsWith(devOrigin));
+    if (internal) return;
+    event.preventDefault();
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url);
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  // Nothing here needs a <webview>, and one would arrive with weaker settings.
+  win.webContents.on('will-attach-webview', (event) => event.preventDefault());
+}
+
 /** One renderer bundle, routed by hash. */
 function loadRoute(win: BrowserWindow, route: string): void {
   if (DEV_URL) {
@@ -45,12 +79,7 @@ function createMainWindow(): BrowserWindow {
     backgroundColor: '#0b0d12',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 18 },
-    webPreferences: {
-      preload: PRELOAD,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
+    webPreferences: rendererPrefs(),
   });
 
   win.once('ready-to-show', () => win.show());
@@ -58,11 +87,7 @@ function createMainWindow(): BrowserWindow {
     mainWindow = null;
   });
 
-  // Links always open in the real browser, never inside the app.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) void shell.openExternal(url);
-    return { action: 'deny' };
-  });
+  harden(win);
 
   loadRoute(win, '/');
   mainWindow = win;
@@ -98,12 +123,7 @@ export function openCaptureWindow(): void {
     alwaysOnTop: true,
     skipTaskbar: true,
     backgroundColor: '#11141b',
-    webPreferences: {
-      preload: PRELOAD,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
+    webPreferences: rendererPrefs(),
   });
   let closeOnBlur = false;
   win.once('ready-to-show', () => {
@@ -123,6 +143,7 @@ export function openCaptureWindow(): void {
   win.on('closed', () => {
     captureWindow = null;
   });
+  harden(win);
   loadRoute(win, '/capture');
   captureWindow = win;
 }
@@ -152,23 +173,19 @@ export function setMiniTimer(on: boolean): void {
     maximizable: false,
     minimizable: false,
     backgroundColor: '#0b0d12',
-    webPreferences: {
-      preload: PRELOAD,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
+    webPreferences: rendererPrefs(),
   });
   win.setAlwaysOnTop(true, 'floating');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.once('ready-to-show', () => {
-    const { workArea } = require('electron').screen.getPrimaryDisplay();
+    const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     win.setPosition(workArea.x + workArea.width - 228, workArea.y + 20);
     win.show();
   });
   win.on('closed', () => {
     miniWindow = null;
   });
+  harden(win);
   loadRoute(win, '/mini');
   miniWindow = win;
 }
@@ -183,6 +200,56 @@ function applyHotkey(): void {
   }
 }
 
+const trayDeps = {
+  openCapture: () => openCaptureWindow(),
+  startBurst: () => startBurstFlow(),
+  showMain: (route?: string) => showMainWindow(route),
+};
+
+/**
+ * A burst left running well past 4:00 belongs to an earlier session - forgotten
+ * overnight, or the laptop slept through it. Close it out so it still reaches
+ * the ship log and today's burst can start. The grace period means finishing
+ * normally at 4:00 still leaves time to write the log.
+ */
+function endStaleBurst(): boolean {
+  const burst = store.get().burst;
+  if (!burst) return false;
+  if (elapsedMs(burst) < BURST_END_MS + STALE_GRACE_MS) return false;
+  finishBurst(store, 'parked');
+  setMiniTimer(false);
+  console.warn('[burst-board] a burst was left running past four hours - logged it and cleared it.');
+  return true;
+}
+
+/**
+ * A burst measures wall-clock time so it survives a quit and restart, which
+ * also meant a closed lid counted as hours of work. Sleep is folded into the
+ * same paused total the pause button uses.
+ */
+let sleepStartedAt: number | null = null;
+
+function trackSleep(): void {
+  powerMonitor.on('suspend', () => {
+    const burst = store.get().burst;
+    // Already paused by hand? The pause is doing the accounting.
+    if (burst && !burst.pausedAt) sleepStartedAt = Date.now();
+  });
+
+  powerMonitor.on('resume', () => {
+    const slept = sleepStartedAt === null ? 0 : Date.now() - sleepStartedAt;
+    sleepStartedAt = null;
+    if (slept > 0) {
+      store.update((s) => {
+        if (s.burst && !s.burst.pausedAt) s.burst.pausedMs += slept;
+      });
+    }
+    endStaleBurst();
+    broadcastState(store);
+    refreshTray(store, trayDeps);
+  });
+}
+
 /** Tray "Start burst": go straight to the spin wheel, or to a running burst. */
 function startBurstFlow(): void {
   showMainWindow(store.get().burst ? 'burst' : 'spin');
@@ -192,12 +259,6 @@ app.whenReady().then(() => {
   if (!hasInstanceLock) return;
   nativeTheme.themeSource = 'dark';
   store = new Store();
-
-  const trayDeps = {
-    openCapture: openCaptureWindow,
-    startBurst: startBurstFlow,
-    showMain: (route?: string) => showMainWindow(route),
-  };
 
   registerIpc(store, {
     broadcast: () => broadcastState(store),
@@ -210,9 +271,13 @@ app.whenReady().then(() => {
     startBurstFlow,
   });
 
+  // Before any window reads it: yesterday's burst should not block today's.
+  endStaleBurst();
+
   createMainWindow();
   createTray(store, trayDeps);
   applyHotkey();
+  trackSleep();
 
   // Restore a mini timer that was open when the app last quit.
   if (store.get().burst?.miniTimer) setMiniTimer(true);
@@ -224,8 +289,11 @@ app.whenReady().then(() => {
     onWeeklyReminder: () => showMainWindow('shrink'),
   });
 
-  // Keep the menu bar clock honest.
-  setInterval(() => refreshTray(store, trayDeps), 30_000);
+  // Keep the menu bar clock honest, and sweep up a burst that ran away.
+  setInterval(() => {
+    if (endStaleBurst()) broadcastState(store);
+    refreshTray(store, trayDeps);
+  }, 30_000);
 
   app.on('activate', () => showMainWindow());
 });

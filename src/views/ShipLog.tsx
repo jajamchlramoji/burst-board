@@ -12,7 +12,7 @@ interface Props {
 export default function ShipLog({ state, flash }: Props) {
   const shipped = state.ships
     .filter((s) => s.status === 'shipped' && s.shippedAt)
-    .sort((a, b) => (b.shippedAt! > a.shippedAt! ? 1 : -1));
+    .sort((a, b) => b.shippedAt!.localeCompare(a.shippedAt!));
 
   const streak = shipStreak(state.history);
   const month = shipsThisMonth(state.ships);
@@ -20,9 +20,11 @@ export default function ShipLog({ state, flash }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
 
   async function doExport() {
-    const path = await window.burst.exportMarkdown();
-    if (path) flash(`Exported to ${path}`);
-    else flash('Export cancelled.');
+    const res = await window.burst.exportMarkdown();
+    if (res.ok) flash(`Exported to ${res.path}`);
+    else if ('canceled' in res) flash('Export cancelled.');
+    // A read-only folder or a full disk used to fail in total silence.
+    else flash(`Could not write the file: ${res.error}`);
   }
 
   return (

@@ -4,7 +4,6 @@ import { WHERE_LABELS } from '../../shared/types';
 import {
   BURST_END_MS,
   LOG_PROMPT_MS,
-  MIN,
   PHASE_HINT,
   PHASE_LABEL,
   PHASE_SEGMENTS,
@@ -22,7 +21,7 @@ interface Props {
   goSpin: () => void;
 }
 
-const SNOOZE_MS = 5 * MIN;
+const SNOOZE_MINUTES = 5;
 
 export default function Burst({ state, flash, goSpin }: Props) {
   const now = useNow(1000);
@@ -31,7 +30,6 @@ export default function Burst({ state, flash, goSpin }: Props) {
 
   const [urlDraft, setUrlDraft] = useState('');
   const [extraUrl, setExtraUrl] = useState('');
-  const [snoozeUntil, setSnoozeUntil] = useState(0);
   const [win, setWin] = useState('');
   const [v2, setV2] = useState('');
   const [endConfirm, setEndConfirm] = useState(false);
@@ -65,7 +63,10 @@ export default function Burst({ state, flash, goSpin }: Props) {
   const paused = Boolean(burst.pausedAt);
   const remaining = Math.max(0, BURST_END_MS - ms);
   const checkpointDue = ms >= SHIP_CHECKPOINT_MS && !burst.shipped;
-  const showCheckpoint = checkpointDue && now > snoozeUntil && !paused;
+  // Read off the session, so "5 more minutes" survives a tab switch and a
+  // restart instead of snapping the modal straight back.
+  const snoozedUntil = burst.snoozeUntil ? new Date(burst.snoozeUntil).getTime() : 0;
+  const showCheckpoint = checkpointDue && now > snoozedUntil && !paused;
   const logDue = ms >= LOG_PROMPT_MS;
 
   const shipNow = async (raw: string) => {
@@ -172,7 +173,7 @@ export default function Burst({ state, flash, goSpin }: Props) {
           {burst.miniTimer ? 'Hide mini timer' : 'Mini timer on top'}
         </button>
         {!burst.shipped && ms >= SHIP_CHECKPOINT_MS && (
-          <button className="btn primary big" onClick={() => setSnoozeUntil(0)}>
+          <button className="btn primary big" onClick={() => void window.burst.burst.snooze(0)}>
             Ship it now
           </button>
         )}
@@ -291,7 +292,7 @@ export default function Burst({ state, flash, goSpin }: Props) {
               <button
                 className="btn"
                 onClick={() => {
-                  setSnoozeUntil(Date.now() + SNOOZE_MS);
+                  void window.burst.burst.snooze(SNOOZE_MINUTES);
                   flash('Back in 5 minutes.');
                 }}
               >

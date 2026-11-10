@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AppState, Settings } from '../shared/types';
 
-const STATE_VERSION = 1;
+const STATE_VERSION = 2;
 
 function defaultSettings(): Settings {
   return {
@@ -15,6 +15,24 @@ function defaultSettings(): Settings {
     lastReminderDate: null,
     globalHotkeyEnabled: true,
   };
+}
+
+/**
+ * Forward migrations, oldest first. Every stored file passes through here on
+ * the way in, so a board written by any earlier build lands on the current
+ * shape instead of arriving with holes in it.
+ */
+function migrate(raw: Partial<AppState>): Partial<AppState> {
+  const from = typeof raw.version === 'number' ? raw.version : 1;
+  const out: Partial<AppState> = { ...raw };
+
+  // v1 -> v2: the ship-checkpoint snooze moved out of the view and onto the
+  // session, so it survives a tab switch and a restart.
+  if (from < 2 && out.burst && out.burst.snoozeUntil === undefined) {
+    out.burst = { ...out.burst, snoozeUntil: null };
+  }
+
+  return out;
 }
 
 function defaultState(): AppState {
@@ -48,7 +66,8 @@ export class Store {
   }
 
   /** Fill in anything a stored file is missing, without trusting its shape. */
-  private hydrate(parsed: Partial<AppState>): AppState {
+  private hydrate(raw: Partial<AppState>): AppState {
+    const parsed = migrate(raw);
     return {
       ...defaultState(),
       ...parsed,
@@ -87,6 +106,25 @@ export class Store {
     }
   }
 
+  /**
+   * A file from a newer build can hold fields this one does not know about,
+   * and loading it would drop them on the next write. Keep a copy first.
+   */
+  private guardNewerVersion(parsed: Partial<AppState>): void {
+    const v = parsed.version;
+    if (typeof v !== 'number' || v <= STATE_VERSION) return;
+    const aside = `${this.file}.v${v}`;
+    try {
+      if (!fs.existsSync(aside)) fs.copyFileSync(this.file, aside);
+    } catch {
+      /* ignore */
+    }
+    console.warn(
+      `[burst-board] data file is version ${v} but this build understands ${STATE_VERSION}. ` +
+        `Kept an untouched copy at ${path.basename(aside)}.`,
+    );
+  }
+
   private load(): void {
     if (!fs.existsSync(this.file)) {
       this.state = defaultState();
@@ -96,6 +134,7 @@ export class Store {
 
     const live = this.readState(this.file);
     if (live) {
+      this.guardNewerVersion(live);
       this.state = this.hydrate(live);
       this.writeBackup();
       return;
@@ -126,7 +165,15 @@ export class Store {
     const tmp = `${this.file}.tmp`;
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
-      fs.writeFileSync(tmp, JSON.stringify(this.state, null, 2), 'utf8');
+      // Flush to disk before renaming. The rename is atomic, the write behind
+      // it is not, so without this a power cut can publish a truncated file.
+      const fd = fs.openSync(tmp, 'w');
+      try {
+        fs.writeFileSync(fd, JSON.stringify(this.state, null, 2), 'utf8');
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
       fs.renameSync(tmp, this.file);
     } catch (err) {
       console.error('[burst-board] write failed:', err);

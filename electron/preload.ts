@@ -1,73 +1,64 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AppState, BurstOutcome, Idea, IdeaTag, Settings, Ship, ShipWhere } from '../shared/types';
+import type { BurstApi } from '../shared/api';
 
-type Reply = { ok: true; state: AppState } | { ok: false; error: string };
+/**
+ * Typed as BurstApi on purpose: the contract lives in shared/api.ts and both
+ * this bridge and the renderer are checked against it, so the two can never
+ * drift apart without a compile error.
+ */
+const api: BurstApi = {
+  getState: () => ipcRenderer.invoke('state:get'),
+  dataFile: () => ipcRenderer.invoke('app:dataFile'),
 
-const api = {
-  getState: (): Promise<AppState> => ipcRenderer.invoke('state:get'),
-  dataFile: (): Promise<string> => ipcRenderer.invoke('app:dataFile'),
-
-  onStateChanged: (cb: (state: AppState) => void): (() => void) => {
-    const handler = (_e: unknown, state: AppState) => cb(state);
+  onStateChanged: (cb) => {
+    const handler = (_e: unknown, state: Parameters<typeof cb>[0]) => cb(state);
     ipcRenderer.on('state:changed', handler);
     return () => ipcRenderer.removeListener('state:changed', handler);
   },
 
-  /** Main process asks the UI to go somewhere (tray / hotkey / notification click). */
-  onNavigate: (cb: (route: string) => void): (() => void) => {
+  /** Main process asks the UI to go somewhere (tray / hotkey / notification). */
+  onNavigate: (cb) => {
     const handler = (_e: unknown, route: string) => cb(route);
     ipcRenderer.on('app:navigate', handler);
     return () => ipcRenderer.removeListener('app:navigate', handler);
   },
 
   ideas: {
-    add: (input: { text: string; sourceLink?: string; tag?: IdeaTag }): Promise<Reply> =>
-      ipcRenderer.invoke('idea:add', input),
-    update: (id: string, patch: Partial<Idea>): Promise<Reply> =>
-      ipcRenderer.invoke('idea:update', { id, patch }),
-    remove: (id: string): Promise<Reply> => ipcRenderer.invoke('idea:delete', id),
+    add: (input) => ipcRenderer.invoke('idea:add', input),
+    update: (id, patch) => ipcRenderer.invoke('idea:update', { id, patch }),
+    remove: (id) => ipcRenderer.invoke('idea:delete', id),
   },
 
   ships: {
-    create: (input: {
-      ideaId: string | null;
-      title: string;
-      liveIn2h: string;
-      where: ShipWhere;
-      whereOther?: string;
-      uglyV1?: string;
-    }): Promise<Reply> => ipcRenderer.invoke('ship:create', input),
-    update: (id: string, patch: Partial<Ship>): Promise<Reply> =>
-      ipcRenderer.invoke('ship:update', { id, patch }),
-    park: (id: string): Promise<Reply> => ipcRenderer.invoke('ship:park', id),
-    unpark: (id: string): Promise<Reply> => ipcRenderer.invoke('ship:unpark', id),
-    remove: (id: string): Promise<Reply> => ipcRenderer.invoke('ship:delete', id),
-    addUrl: (id: string, url: string): Promise<Reply> => ipcRenderer.invoke('ship:addUrl', { id, url }),
-    removeUrl: (id: string, url: string): Promise<Reply> =>
-      ipcRenderer.invoke('ship:removeUrl', { id, url }),
+    create: (input) => ipcRenderer.invoke('ship:create', input),
+    update: (id, patch) => ipcRenderer.invoke('ship:update', { id, patch }),
+    park: (id) => ipcRenderer.invoke('ship:park', id),
+    unpark: (id) => ipcRenderer.invoke('ship:unpark', id),
+    remove: (id) => ipcRenderer.invoke('ship:delete', id),
+    addUrl: (id, url) => ipcRenderer.invoke('ship:addUrl', { id, url }),
+    removeUrl: (id, url) => ipcRenderer.invoke('ship:removeUrl', { id, url }),
   },
 
   burst: {
-    start: (shipId: string): Promise<Reply> => ipcRenderer.invoke('burst:start', shipId),
-    pause: (): Promise<Reply> => ipcRenderer.invoke('burst:pause'),
-    resume: (): Promise<Reply> => ipcRenderer.invoke('burst:resume'),
-    shipNow: (url: string): Promise<Reply> => ipcRenderer.invoke('burst:shipNow', url),
-    ackCheckpoint: (): Promise<Reply> => ipcRenderer.invoke('burst:ackCheckpoint'),
-    ackLogPrompt: (): Promise<Reply> => ipcRenderer.invoke('burst:ackLogPrompt'),
-    setMini: (on: boolean): Promise<Reply> => ipcRenderer.invoke('burst:setMini', on),
-    end: (outcome: BurstOutcome): Promise<Reply> => ipcRenderer.invoke('burst:end', outcome),
+    start: (shipId) => ipcRenderer.invoke('burst:start', shipId),
+    pause: () => ipcRenderer.invoke('burst:pause'),
+    resume: () => ipcRenderer.invoke('burst:resume'),
+    shipNow: (url) => ipcRenderer.invoke('burst:shipNow', url),
+    ackCheckpoint: () => ipcRenderer.invoke('burst:ackCheckpoint'),
+    ackLogPrompt: () => ipcRenderer.invoke('burst:ackLogPrompt'),
+    snooze: (minutes) => ipcRenderer.invoke('burst:snooze', minutes),
+    setMini: (on) => ipcRenderer.invoke('burst:setMini', on),
+    end: (outcome) => ipcRenderer.invoke('burst:end', outcome),
   },
 
   settings: {
-    update: (patch: Partial<Settings>): Promise<Reply> => ipcRenderer.invoke('settings:update', patch),
+    update: (patch) => ipcRenderer.invoke('settings:update', patch),
   },
 
-  openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('shell:open', url),
-  openCapture: (): Promise<void> => ipcRenderer.invoke('window:openCapture'),
-  closeCapture: (): Promise<void> => ipcRenderer.invoke('window:closeCapture'),
-  exportMarkdown: (): Promise<string | null> => ipcRenderer.invoke('export:markdown'),
+  openExternal: (url) => ipcRenderer.invoke('shell:open', url),
+  openCapture: () => ipcRenderer.invoke('window:openCapture'),
+  closeCapture: () => ipcRenderer.invoke('window:closeCapture'),
+  exportMarkdown: () => ipcRenderer.invoke('export:markdown'),
 };
 
 contextBridge.exposeInMainWorld('burst', api);
-
-export type BurstApi = typeof api;

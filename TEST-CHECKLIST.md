@@ -179,6 +179,31 @@ To test it without waiting for Sunday:
       version, so nothing is ever silently thrown away.
 - [ ] Delete the `.corrupt-` file when you are done - it is just evidence.
 
+### Burst edge cases
+
+- [ ] Start a burst. Click **5 more minutes** on the ship checkpoint when it appears
+      (or set `snoozeUntil` aside and reach it as in section 5). Now switch to the
+      **Ship log** tab and back to **Burst**.
+      → The modal stays away. Quit and reopen the app: still away, until the five
+      minutes are up.
+- [ ] While a burst is running, shut the lid for a few minutes, then reopen.
+      → The clock has **not** advanced by the time you were away. Sleep counts as paused.
+- [ ] Quit the app. In the data file, set the burst's `startedAt` to ten hours ago
+      (same trick as section 5). Reopen the app.
+      → No burst is running, the **Burst** tab invites you to spin, and the **Ship log**
+      has a new entry for it of 4h 0m — logged, not lost.
+- [ ] Start a burst, then delete that ship from **Shrink**.
+      → The burst stops, any mini timer window closes, and the burst still appears
+      in the ship log.
+- [ ] Paste `http://127.1` or `http://192.168.1.5` at the ship checkpoint.
+      → Refused: a shipped link has to be public. `example.com/thing` is accepted and
+      stored as `https://example.com/thing`.
+
+### Automated checks
+
+- [ ] `npm run verify` → typecheck passes, then **81 unit tests** and **29 integration
+      checks** all pass. Worth running before you package a build.
+
 ---
 
 ## If something goes wrong
