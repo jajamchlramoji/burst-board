@@ -35,7 +35,7 @@ function applyTheme(): void {
 
 /** Window chrome has to match, or a light window flashes dark while loading. */
 function chromeColor(): string {
-  return nativeTheme.shouldUseDarkColors ? '#0b0d12' : '#f5f7fb';
+  return nativeTheme.shouldUseDarkColors ? '#2b2d31' : '#f5f6f8';
 }
 
 /** Renderer settings every window shares. Sandboxed: the preload only needs

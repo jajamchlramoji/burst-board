@@ -1,40 +1,55 @@
 :root {
-  --bg: #0b0d12;
-  --panel: #12161f;
-  --panel-2: #171c28;
-  --line: #242c3c;
-  --line-soft: #1b2230;
-  --text: #e9edf6;
-  --muted: #8b96ad;
-  --muted-2: #697389;
-  --accent: #ffb43d;
-  --accent-ink: #1a1203;
+  /* ── Burst Board palette ──────────────────────────────────────────
+   * Gray  #2B2D31  — whole background, all surfaces
+   * Silver #D9DADC — all body text, labels, icons
+   * Yellow #FFC93C — primary accent: buttons, tabs, clock, active states
+   * Red   #E8412C  — destructive & warn only
+   * ──────────────────────────────────────────────────────────────── */
+
+  /* Gray family — bg → line, lightest step ~26 L-points above bg */
+  --bg:        #2b2d31;
+  --panel:     #313438;
+  --panel-2:   #37393e;
+  --line:      #42454b;
+  --line-soft: #35373c;
+
+  /* Silver text family */
+  --text:      #d9dadc;
+  --muted:     #8e9094;
+  --muted-2:   #68696c;
+
+  /* Accent: yellow leads everything interactive */
+  --accent:     #ffc93c;
+  --accent-ink: #1a1200;
+
+  /* Status */
   --good: #46d39a;
   --fomo: #7aa2ff;
-  --warn: #ff7a66;
-  --radius: 14px;
+  --warn: #e8412c;
+
+  --radius:    14px;
   --radius-sm: 10px;
 
-  /* Derived surfaces. Named so a palette swap reaches all of them. */
-  --pill-fomo-line: #2d3c63;
-  --pill-fomo-bg: #141b2c;
+  /* Derived surfaces — all grounded in the gray bg */
+  --pill-fomo-line: #2d3a5f;
+  --pill-fomo-bg:   #272d3c;
   --pill-good-line: #1e4a3a;
-  --pill-good-bg: #0f1d19;
-  --pill-accent-line: #4a3a16;
-  --pill-accent-bg: #1d1708;
-  --banner-warn-bg: #241512;
+  --pill-good-bg:   #242e2c;
+  --pill-accent-line: #4a3d14;
+  --pill-accent-bg:   #2e2910;
+  --banner-warn-bg:   #321f1c;
   --banner-warn-line: #5a2a22;
-  --banner-warn-text: #ffb7a8;
-  --banner-info-bg: #101b18;
+  --banner-warn-text: #ff9080;
+  --banner-info-bg:   #232e2b;
   --banner-info-line: #1e4a3a;
   --banner-info-text: #a8e9cd;
-  --accent-glow: #ffb43d1f;
-  --scrim: #05070ad9;
-  --shadow-modal: #000000a6;
-  --shadow-toast: #000000a0;
-  --capture-bg: #11141b;
-  --mini-bg: #0b0d12f2;
-  --scrollbar: #222a3a;
+  --accent-glow:  #ffc93c1f;
+  --scrim:        #1c1d20d9;
+  --shadow-modal: #000000b0;
+  --shadow-toast: #000000a8;
+  --capture-bg:   #2b2d31;
+  --mini-bg:      #272930f2;
+  --scrollbar:    #3e4147;
 
   color-scheme: dark;
 }
@@ -46,41 +61,41 @@
  */
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #f5f7fb;
-    --panel: #ffffff;
-    --panel-2: #eef1f7;
-    --line: #d6dce9;
-    --line-soft: #e7ebf3;
-    --text: #141a28;
-    --muted: #5a6478;
-    --muted-2: #7b8598;
-    /* The bright amber is unreadable on white, so text and borders use a
-       deeper one while anything filled keeps white ink on top. */
-    --accent: #9a5a00;
+    --bg:        #f5f6f8;
+    --panel:     #ffffff;
+    --panel-2:   #eef0f3;
+    --line:      #d6d8dc;
+    --line-soft: #e6e8ec;
+    --text:      #2b2d31;
+    --muted:     #5a5c60;
+    --muted-2:   #7b7d80;
+    /* Yellow #FFC93C is illegible on white — use a deep amber for text/borders,
+       keep white ink on any filled yellow surface. */
+    --accent:     #b87e00;
     --accent-ink: #ffffff;
-    --good: #0b7049;
-    --fomo: #2550c8;
-    --warn: #b23523;
+    --good:  #0b7049;
+    --fomo:  #2550c8;
+    --warn:  #c43020;
 
     --pill-fomo-line: #bdcbf0;
-    --pill-fomo-bg: #eef3ff;
+    --pill-fomo-bg:   #eef3ff;
     --pill-good-line: #b4ddc9;
-    --pill-good-bg: #ecfaf4;
-    --pill-accent-line: #e8cf9a;
-    --pill-accent-bg: #fff6e6;
-    --banner-warn-bg: #fdeeeb;
-    --banner-warn-line: #f0c3bb;
+    --pill-good-bg:   #ecfaf4;
+    --pill-accent-line: #e8c96e;
+    --pill-accent-bg:   #fff8e0;
+    --banner-warn-bg:   #fdeeed;
+    --banner-warn-line: #f0bfbb;
     --banner-warn-text: #8c2a1a;
-    --banner-info-bg: #eafaf3;
+    --banner-info-bg:   #eafaf3;
     --banner-info-line: #b4ddc9;
     --banner-info-text: #0b5c3c;
-    --accent-glow: #9a5a0026;
-    --scrim: #5a6375a6;
-    --shadow-modal: #1b22303d;
-    --shadow-toast: #1b223047;
-    --capture-bg: #ffffff;
-    --mini-bg: #fffffff2;
-    --scrollbar: #c4ccdb;
+    --accent-glow:  #b87e0022;
+    --scrim:        #5a5c60a6;
+    --shadow-modal: #2b2d313d;
+    --shadow-toast: #2b2d3147;
+    --capture-bg:   #ffffff;
+    --mini-bg:      #fffffff2;
+    --scrollbar:    #c4c6ca;
 
     color-scheme: light;
   }
