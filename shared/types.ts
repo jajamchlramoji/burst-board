@@ -31,6 +31,8 @@ export interface Ship {
   urls: string[];
   win: string;
   v2: string;
+  /** Why this ship was parked, required when stopping mid-way. */
+  blockedReason: string;
 }
 
 export type BurstPhase = 'scope' | 'build' | 'improve' | 'log' | 'done';

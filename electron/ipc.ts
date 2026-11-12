@@ -75,7 +75,7 @@ function shipPatch(raw: unknown): Partial<Ship> {
   if (typeof p.where === 'string' && p.where in WHERE_LABELS) {
     out.where = p.where as ShipWhere;
   }
-  for (const key of ['whereOther', 'uglyV1', 'win', 'v2'] as const) {
+  for (const key of ['whereOther', 'uglyV1', 'win', 'v2', 'blockedReason'] as const) {
     const v = str(p[key]);
     if (v !== undefined) out[key] = v;
   }
@@ -115,7 +115,7 @@ function settingsPatch(raw: unknown): Partial<Settings> {
  * "End burst" button and by the stale-burst cleanup on launch and on wake, so
  * a burst can never vanish without being recorded.
  */
-export function finishBurst(store: Store, outcome: BurstOutcome, now = Date.now()): boolean {
+export function finishBurst(store: Store, outcome: BurstOutcome, now = Date.now(), blockedReason = ''): boolean {
   const state = store.get();
   const burst = state.burst;
   if (!burst) return false;
@@ -139,6 +139,7 @@ export function finishBurst(store: Store, outcome: BurstOutcome, now = Date.now(
     const target = s.ships.find((x) => x.id === burst.shipId);
     if (target && resolved === 'parked' && target.status === 'active') {
       target.status = 'parked';
+      if (blockedReason.trim()) target.blockedReason = blockedReason.trim();
     }
     s.burst = null;
   });
@@ -225,6 +226,7 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
       urls: [],
       win: '',
       v2: '',
+      blockedReason: '',
     };
     store.update((s) => {
       s.ships.unshift(ship);
@@ -247,10 +249,14 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
     return ok();
   });
 
-  ipcMain.handle('ship:park', (_e, id: string): Reply => {
+  ipcMain.handle('ship:park', (_e, input: { id: string; blockedReason: string }): Reply => {
+    const { id, blockedReason } = (input ?? {}) as { id?: string; blockedReason?: string };
     store.update((s) => {
       const ship = s.ships.find((x) => x.id === id);
-      if (ship && ship.status === 'active') ship.status = 'parked';
+      if (ship && ship.status === 'active') {
+        ship.status = 'parked';
+        ship.blockedReason = (typeof blockedReason === 'string' ? blockedReason : '').trim();
+      }
     });
     return ok();
   });
@@ -401,9 +407,13 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
     return ok();
   });
 
-  ipcMain.handle('burst:end', (_e, outcome: BurstOutcome): Reply => {
+  ipcMain.handle('burst:end', (_e, input: unknown): Reply => {
+    const { outcome, blockedReason } = (input ?? {}) as {
+      outcome?: BurstOutcome;
+      blockedReason?: string;
+    };
     const resolved: BurstOutcome = outcome === 'shipped' ? 'shipped' : 'parked';
-    if (!finishBurst(store, resolved)) return fail('No burst running.');
+    if (!finishBurst(store, resolved, Date.now(), blockedReason ?? '')) return fail('No burst running.');
     hooks.setMiniTimer?.(false);
     return ok();
   });

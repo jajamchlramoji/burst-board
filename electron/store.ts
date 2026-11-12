@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AppState, Settings } from '../shared/types';
 
-const STATE_VERSION = 2;
+const STATE_VERSION = 3;
 
 function defaultSettings(): Settings {
   return {
@@ -31,6 +31,14 @@ function migrate(raw: Partial<AppState>): Partial<AppState> {
   // session, so it survives a tab switch and a restart.
   if (from < 2 && out.burst && out.burst.snoozeUntil === undefined) {
     out.burst = { ...out.burst, snoozeUntil: null };
+  }
+
+  // v2 -> v3: added blockedReason to Ship so a parked ship records why it stopped.
+  if (from < 3 && Array.isArray(out.ships)) {
+    out.ships = (out.ships as unknown as Record<string, unknown>[]).map((s) => ({
+      ...s,
+      blockedReason: typeof s.blockedReason === 'string' ? s.blockedReason : '',
+    })) as unknown as typeof out.ships;
   }
 
   return out;

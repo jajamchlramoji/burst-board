@@ -34,6 +34,7 @@ export default function Burst({ state, flash, goSpin }: Props) {
   const [v2, setV2] = useState('');
   const [logFor, setLogFor] = useState<string | null>(null);
   const [endConfirm, setEndConfirm] = useState(false);
+  const [parkReason, setParkReason] = useState('');
 
   if (!burst || !ship) {
     return (
@@ -102,11 +103,19 @@ export default function Burst({ state, flash, goSpin }: Props) {
   };
 
   const end = async (outcome: 'shipped' | 'parked') => {
+    if (outcome === 'parked' && !burst.shipped && !parkReason.trim()) {
+      flash('Write why you stopped first — that is the blocker field.');
+      return;
+    }
     if (win || v2) await window.burst.ships.update(ship.id, { win, v2 });
-    const res = await window.burst.burst.end(outcome);
+    const res = await window.burst.burst.end(
+      outcome,
+      outcome === 'parked' && !burst.shipped ? parkReason : undefined,
+    );
     if (!res.ok) flash(res.error);
     else flash(outcome === 'shipped' ? 'Burst logged. Go rest.' : 'Parked. Nothing lost.');
     setEndConfirm(false);
+    setParkReason('');
   };
 
   return (
@@ -304,7 +313,7 @@ export default function Burst({ state, flash, goSpin }: Props) {
               >
                 5 more minutes
               </button>
-              <button className="btn ghost" onClick={() => void end('parked')}>
+              <button className="btn ghost" onClick={() => setEndConfirm(true)}>
                 Park it instead
               </button>
             </div>
@@ -324,6 +333,31 @@ export default function Burst({ state, flash, goSpin }: Props) {
                 ? 'It is already shipped, so this goes in the log as a ship.'
                 : 'This goes down as parked. Not failed, not a streak break - just parked.'}
             </p>
+
+            {/* Blocker reason required when parking without having shipped */}
+            {!burst.shipped && (
+              <label className="field" style={{ marginBottom: 16 }}>
+                <span className="label">
+                  What stopped you? <span className="req">*</span>
+                </span>
+                <textarea
+                  autoFocus
+                  rows={2}
+                  value={parkReason}
+                  placeholder="e.g. blocked on API key, need to redesign the data model..."
+                  onChange={(e) => setParkReason(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void end('parked');
+                    if (e.key === 'Escape') {
+                      setEndConfirm(false);
+                      setParkReason('');
+                    }
+                  }}
+                />
+                <span className="hint">Required — this is what you will read when you come back.</span>
+              </label>
+            )}
+
             <div className="btn-row">
               <button
                 className="btn primary big"
@@ -331,7 +365,7 @@ export default function Burst({ state, flash, goSpin }: Props) {
               >
                 {burst.shipped ? 'End and log the ship' : 'Park it'}
               </button>
-              <button className="btn" onClick={() => setEndConfirm(false)}>
+              <button className="btn" onClick={() => { setEndConfirm(false); setParkReason(''); }}>
                 Keep going
               </button>
             </div>

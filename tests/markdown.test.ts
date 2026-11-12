@@ -17,6 +17,7 @@ function ship(over: Partial<Ship> = {}): Ship {
     urls: ['https://github.com/me/thing'],
     win: 'It went out',
     v2: '',
+    blockedReason: '',
     ...over,
   };
 }

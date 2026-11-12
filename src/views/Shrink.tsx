@@ -30,6 +30,10 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
   const [whereOther, setWhereOther] = useState('');
   const [uglyV1, setUglyV1] = useState('');
 
+  // Park blocker state: which ship is being parked and why
+  const [parkingId, setParkingId] = useState<string | null>(null);
+  const [parkReason, setParkReason] = useState('');
+
   // Hand the request back so returning to this tab later starts blank. This
   // only touches the parent, never local state.
   useEffect(() => {
@@ -62,6 +66,31 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
     setWhereOther('');
     setUglyV1('');
     flash('One-burst ship added.');
+  }
+
+  function requestPark(id: string) {
+    setParkingId(id);
+    setParkReason('');
+  }
+
+  function cancelPark() {
+    setParkingId(null);
+    setParkReason('');
+  }
+
+  async function confirmPark() {
+    if (!parkReason.trim()) {
+      flash('Write why it stopped first — you will thank yourself later.');
+      return;
+    }
+    const res = await window.burst.ships.park(parkingId!, parkReason);
+    if (!res.ok) {
+      flash(res.error);
+      return;
+    }
+    setParkingId(null);
+    setParkReason('');
+    flash('Parked. It will wait without nagging you.');
   }
 
   return (
@@ -177,46 +206,78 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
         </div>
       ) : (
         active.map((s) => (
-          <div className="item" key={s.id}>
-            <div className="body">
-              <div className="title">{s.title}</div>
-              <div className="meta">
-                <span className="pill active">Active</span>
-                <span>{WHERE_LABELS[s.where]}{s.where === 'other' && s.whereOther ? `: ${s.whereOther}` : ''}</span>
-                <span>{fmtDate(s.createdAt)}</span>
+          <div key={s.id}>
+            <div className="item">
+              <div className="body">
+                <div className="title">{s.title}</div>
+                <div className="meta">
+                  <span className="pill active">Active</span>
+                  <span>{WHERE_LABELS[s.where]}{s.where === 'other' && s.whereOther ? `: ${s.whereOther}` : ''}</span>
+                  <span>{fmtDate(s.createdAt)}</span>
+                </div>
+                <div className="kv">
+                  <span className="k">In 2h</span>
+                  <span>{s.liveIn2h}</span>
+                  {s.uglyV1 && (
+                    <>
+                      <span className="k">Ugly v1</span>
+                      <span>{s.uglyV1}</span>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="kv">
-                <span className="k">In 2h</span>
-                <span>{s.liveIn2h}</span>
-                {s.uglyV1 && (
-                  <>
-                    <span className="k">Ugly v1</span>
-                    <span>{s.uglyV1}</span>
-                  </>
-                )}
+              <div className="actions">
+                <button
+                  className="btn sm"
+                  onClick={() => requestPark(s.id)}
+                >
+                  Park
+                </button>
+                <button
+                  className="btn sm ghost danger"
+                  title="Delete ship"
+                  onClick={() => {
+                    void window.burst.ships.remove(s.id);
+                    flash('Deleted.');
+                  }}
+                >
+                  &#10005;
+                </button>
               </div>
             </div>
-            <div className="actions">
-              <button
-                className="btn sm"
-                onClick={() => {
-                  void window.burst.ships.park(s.id);
-                  flash('Parked. It will wait without nagging you.');
-                }}
-              >
-                Park
-              </button>
-              <button
-                className="btn sm ghost danger"
-                title="Delete ship"
-                onClick={() => {
-                  void window.burst.ships.remove(s.id);
-                  flash('Deleted.');
-                }}
-              >
-                &#10005;
-              </button>
-            </div>
+
+            {/* Inline park-reason panel */}
+            {parkingId === s.id && (
+              <div className="card" style={{ marginTop: -4, marginBottom: 12, borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
+                <label className="field">
+                  <span className="label">
+                    What stopped you? <span className="req">*</span>
+                  </span>
+                  <textarea
+                    autoFocus
+                    rows={2}
+                    value={parkReason}
+                    placeholder="e.g. blocked on API key, need to redesign the data model..."
+                    onChange={(e) => setParkReason(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void confirmPark();
+                      if (e.key === 'Escape') cancelPark();
+                    }}
+                  />
+                </label>
+                <p className="hint" style={{ marginTop: -4, marginBottom: 12 }}>
+                  Required — this is what you will read when you come back to it.
+                </p>
+                <div className="btn-row">
+                  <button className="btn primary" onClick={() => void confirmPark()}>
+                    Park it
+                  </button>
+                  <button className="btn" onClick={cancelPark}>
+                    Keep active
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))
       )}
@@ -232,6 +293,12 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
                   <span className="pill parked">Parked</span>
                   <span>{s.liveIn2h}</span>
                 </div>
+                {s.blockedReason && (
+                  <div className="kv" style={{ marginTop: 6 }}>
+                    <span className="k">Stopped because</span>
+                    <span>{s.blockedReason}</span>
+                  </div>
+                )}
               </div>
               <div className="actions">
                 <button

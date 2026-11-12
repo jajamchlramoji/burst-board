@@ -38,7 +38,7 @@ export interface BurstApi {
   ships: {
     create: (input: ShipDraft) => Promise<Reply>;
     update: (id: string, patch: Partial<Ship>) => Promise<Reply>;
-    park: (id: string) => Promise<Reply>;
+    park: (id: string, blockedReason: string) => Promise<Reply>;
     unpark: (id: string) => Promise<Reply>;
     remove: (id: string) => Promise<Reply>;
     addUrl: (id: string, url: string) => Promise<Reply>;
@@ -55,7 +55,7 @@ export interface BurstApi {
     /** Hide the ship checkpoint for a few minutes. Survives tabs and restarts. */
     snooze: (minutes: number) => Promise<Reply>;
     setMini: (on: boolean) => Promise<Reply>;
-    end: (outcome: BurstOutcome) => Promise<Reply>;
+    end: (outcome: BurstOutcome, blockedReason?: string) => Promise<Reply>;
   };
 
   settings: { update: (patch: Partial<Settings>) => Promise<Reply> };

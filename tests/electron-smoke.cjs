@@ -40,6 +40,7 @@ fs.writeFileSync(
       { id: 'ship-1', ideaId: null, title: 'Test ship', liveIn2h: 'a thing', where: 'github',
         whereOther: '', uglyV1: '', status: 'active', createdAt: hoursAgo(10),
         shippedAt: null, urls: [], win: '', v2: '' },
+        // blockedReason deliberately absent: migration v2->v3 must add it
     ],
     burst: {
       id: 'burst-1', shipId: 'ship-1', startedAt: hoursAgo(9), pausedMs: 0, pausedAt: null,
@@ -60,10 +61,12 @@ app.whenReady().then(async () => {
   const store = new Store();
 
   // ---- migration + version ----
-  t('v1 file migrated to the current version', store.get().version === 2,
+  t('v1 file migrated to the current version', store.get().version === 3,
     'version=' + store.get().version);
   t('migration filled in the new snoozeUntil field',
     store.get().burst && store.get().burst.snoozeUntil === null);
+  t('migration added blockedReason to ships',
+    store.get().ships[0] && store.get().ships[0].blockedReason === '');
   t('backup written on load', fs.existsSync(DATA + '.bak'));
 
   // ---- stale burst cleanup (what main.ts does on launch) ----

@@ -32,7 +32,7 @@ const api: BurstApi = {
   ships: {
     create: (input) => ipcRenderer.invoke('ship:create', input),
     update: (id, patch) => ipcRenderer.invoke('ship:update', { id, patch }),
-    park: (id) => ipcRenderer.invoke('ship:park', id),
+    park: (id, blockedReason) => ipcRenderer.invoke('ship:park', { id, blockedReason }),
     unpark: (id) => ipcRenderer.invoke('ship:unpark', id),
     remove: (id) => ipcRenderer.invoke('ship:delete', id),
     addUrl: (id, url) => ipcRenderer.invoke('ship:addUrl', { id, url }),
@@ -48,7 +48,7 @@ const api: BurstApi = {
     ackLogPrompt: () => ipcRenderer.invoke('burst:ackLogPrompt'),
     snooze: (minutes) => ipcRenderer.invoke('burst:snooze', minutes),
     setMini: (on) => ipcRenderer.invoke('burst:setMini', on),
-    end: (outcome) => ipcRenderer.invoke('burst:end', outcome),
+    end: (outcome, blockedReason) => ipcRenderer.invoke('burst:end', { outcome, blockedReason }),
   },
 
   settings: {

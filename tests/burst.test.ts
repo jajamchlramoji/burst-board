@@ -174,7 +174,7 @@ describe('shipsThisMonth', () => {
   const ship = (shippedAt: string | null): Ship => ({
     id: Math.random().toString(), ideaId: null, title: 't', liveIn2h: 'x', where: 'github',
     whereOther: '', uglyV1: '', status: shippedAt ? 'shipped' : 'active',
-    createdAt: '2026-11-01T00:00:00', shippedAt, urls: [], win: '', v2: '',
+    createdAt: '2026-11-01T00:00:00', shippedAt, urls: [], win: '', v2: '', blockedReason: '',
   });
 
   it('counts only ships shipped in the current month', () => {
