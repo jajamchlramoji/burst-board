@@ -4,6 +4,7 @@ import { MAX_ACTIVE_SHIPS, TAG_LABELS, WHERE_LABELS } from '../../shared/types';
 import { suggestedTitleFor } from '../lib/title';
 import { fmtDate } from '../lib/hooks';
 import { offerUndo } from '../lib/undo';
+import IconButton from '../lib/IconButton';
 
 interface Props {
   state: AppState;
@@ -234,15 +235,14 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
                 >
                   Park
                 </button>
-                <button
-                  className="btn sm ghost danger"
-                  title="Delete ship"
+                <IconButton
+                  icon="delete"
+                  label="Delete"
+                  tone="danger"
                   onClick={() => {
                     void window.burst.ships.remove(s.id).then(() => offerUndo('Ship deleted.'));
                   }}
-                >
-                  &#10005;
-                </button>
+                />
               </div>
             </div>
 
@@ -311,13 +311,12 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
                 >
                   Unpark
                 </button>
-                <button
-                  className="btn sm ghost danger"
-                  title="Delete ship"
+                <IconButton
+                  icon="delete"
+                  label="Delete"
+                  tone="danger"
                   onClick={() => void window.burst.ships.remove(s.id).then(() => offerUndo('Ship deleted.'))}
-                >
-                  &#10005;
-                </button>
+                />
               </div>
             </div>
           ))}

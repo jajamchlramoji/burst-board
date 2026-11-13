@@ -1012,3 +1012,53 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Icon actions with a hover label ---------- */
+.icon-action {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.icon-action svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon-action:hover,
+.icon-action:focus-visible { color: var(--text); background: var(--hair); border-color: var(--hair-2); outline: none; }
+.icon-action.accent { color: var(--accent); }
+.icon-action.accent:hover { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.icon-action.danger:hover { color: var(--warn); background: var(--banner-warn-bg); border-color: var(--banner-warn-line); }
+.icon-action::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  white-space: nowrap;
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--hair-2);
+  box-shadow: 0 8px 20px -8px var(--shadow-toast);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 20;
+}
+.icon-action:hover::after,
+.icon-action:focus-visible::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 0.25s; }

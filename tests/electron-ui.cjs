@@ -102,7 +102,7 @@ app.whenReady().then(async () => {
     const other = S().ideas.find((i) => i.text === 'An other idea');
     t('chip cycles Own > FOMO > Other and saves Other', other?.tag === 'other', other?.tag);
     t('Other pill shows on the idea', (await js(`return [...document.querySelectorAll('.item')].find((x) => x.textContent.includes('An other idea'))?.querySelector('.pill')?.textContent`)) === 'Other');
-    await js(`const item = [...document.querySelectorAll('.item')].find((x) => x.textContent.includes('An other idea')); item.querySelector('button[title="Delete idea"]').click(); await T.sleep(200);`);
+    await js(`const item = [...document.querySelectorAll('.item')].find((x) => x.textContent.includes('An other idea')); item.querySelector('button[aria-label="Delete"]').click(); await T.sleep(200);`);
 
     for (let i = 1; i <= 20; i++) {
       await js(`const el = document.querySelector('input[aria-label="Idea"]'); await T.type(el, 'Idea number ${i}'); await T.key('Enter', {}, el);`);
@@ -123,7 +123,7 @@ app.whenReady().then(async () => {
     // edit an idea
     await js(`
       const item = [...document.querySelectorAll('.item')].find((x) => x.textContent.includes('Idea number 3'));
-      await T.click('Edit', item);
+      item.querySelector('button[aria-label="Edit"]').click(); await T.sleep(160);
       const ta = document.querySelector('.card textarea'); await T.type(ta, 'Idea number 3 (edited)');
       await T.click('Save', document.querySelector('.card'));`);
     t('inline edit saves', S().ideas.some((i) => i.text === 'Idea number 3 (edited)'));
@@ -133,7 +133,7 @@ app.whenReady().then(async () => {
     const idx = S().ideas.findIndex((i) => i.text === 'Idea number 5');
     await js(`
       const item = [...document.querySelectorAll('.item')].find((x) => x.textContent.includes('Idea number 5'));
-      item.querySelector('button[title="Delete idea"]').click(); await T.sleep(200);`);
+      item.querySelector('button[aria-label="Delete"]').click(); await T.sleep(200);`);
     t('X deletes an idea', S().ideas.length === before - 1 && !S().ideas.some((i) => i.text === 'Idea number 5'));
     t('delete offers Undo', (await js(`return T.text('.toast.with-action span')`)) === 'Idea deleted.');
     await js(`await T.click('Undo'); await T.sleep(150);`);
@@ -142,7 +142,7 @@ app.whenReady().then(async () => {
     t('a second Undo has nothing to undo', S().ideas.length === before);
     await js(`
       const item = [...document.querySelectorAll('.item')].find((x) => x.textContent.includes('Idea number 5'));
-      item.querySelector('button[title="Delete idea"]').click(); await T.sleep(200);`);
+      item.querySelector('button[aria-label="Delete"]').click(); await T.sleep(200);`);
     await shot('01-inbox');
 
     // ---------------- Shrink ----------------
@@ -180,7 +180,7 @@ app.whenReady().then(async () => {
     t('blocker shows on the parked card', (await js(`return document.querySelector('.blocker')?.textContent || ''`)).includes('API key'));
     await js(`const item = [...document.querySelectorAll('.item')].find((x) => x.textContent.includes('Ship E')); await T.click('Unpark', item);`);
     t('unpark returns it to active', S().ships.find((s) => s.title === 'Ship E').status === 'active');
-    await js(`const item = [...document.querySelectorAll('.item')].find((x) => x.textContent.includes('Ship E')); item.querySelector('button[title="Delete ship"]').click(); await T.sleep(200);`);
+    await js(`const item = [...document.querySelectorAll('.item')].find((x) => x.textContent.includes('Ship E')); item.querySelector('button[aria-label="Delete"]').click(); await T.sleep(200);`);
     t('X deletes a ship', !S().ships.some((s) => s.title === 'Ship E'));
     await shot('02-shrink');
 
@@ -283,10 +283,20 @@ app.whenReady().then(async () => {
     t('ship log lists the ship and its win', logText.includes(ship().title) && logText.includes('It went live in 40 minutes'));
     await shot('07-shiplog');
 
+    // icon buttons say what they are on hover
+    const rect = await js(`const r = document.querySelector('.log-entry button[aria-label="Share"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 };`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(rect.x), y: Math.round(rect.y) });
+    await new Promise((r) => setTimeout(r, 600));
+    const tip = await js(`const b = document.querySelector('.log-entry button[aria-label="Share"]'); const a = getComputedStyle(b, '::after'); return { text: a.content, opacity: a.opacity, labels: [...document.querySelectorAll('.log-entry .icon-action')].map((x) => x.getAttribute('aria-label')) };`);
+    t('hovering an icon shows its label', tip.text === '"Share"' && tip.opacity === '1', JSON.stringify(tip));
+    t('log rows have Share, Edit and Delete icons', ['Share', 'Edit', 'Delete'].every((l) => tip.labels.includes(l)));
+    await shot('07a-icon-hover');
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 700 });
+
     // share card
     const share = await js(`
       const row = [...document.querySelectorAll('.log-entry')][0];
-      row.querySelector('button[title^="Make an image"]').click();
+      row.querySelector('button[aria-label="Share"]').click();
       for (let i = 0; i < 30 && !document.querySelector('.share-canvas.ready'); i++) await T.sleep(100);
       const c = document.querySelector('.share-canvas');
       const bad = await window.burst.share.copyImage('data:text/html,<b>nope</b>');
@@ -305,7 +315,7 @@ app.whenReady().then(async () => {
     // delete from the log: back to the Inbox, undo, delete permanently, undo
     const logged = structuredClone(ship());
     const histBefore = S().history.length;
-    const openRemove = `const row = [...document.querySelectorAll('.log-entry')].find((x) => x.querySelector('.title')?.textContent === ${JSON.stringify(logged.title)}); row.querySelector('button[title="Remove from the log"]').click(); await T.sleep(200);`;
+    const openRemove = `const row = [...document.querySelectorAll('.log-entry')].find((x) => x.querySelector('.title')?.textContent === ${JSON.stringify(logged.title)}); row.querySelector('button[aria-label="Delete"]').click(); await T.sleep(200);`;
     await js(openRemove);
     t('Delete opens the choice dialog', (await js(`return T.text('.modal h3')`)).includes(logged.title));
     await shot('07b-shiplog-delete');
@@ -338,7 +348,7 @@ app.whenReady().then(async () => {
     await js(`await T.tab('Spin'); await T.key(' '); for (let i = 0; i < 40 && !document.querySelector('.reel.landed'); i++) await T.sleep(200); await T.key('Enter', { metaKey: true }); await T.sleep(300);`);
     const delId = S().burst?.shipId;
     const delTitle = S().ships.find((s) => s.id === delId)?.title;
-    await js(`await T.tab('Shrink'); const item = [...document.querySelectorAll('.item')].find((x) => x.querySelector('.title')?.textContent === ${JSON.stringify(delTitle)}); item.querySelector('button[title="Delete ship"]').click(); await T.sleep(300);`);
+    await js(`await T.tab('Shrink'); const item = [...document.querySelectorAll('.item')].find((x) => x.querySelector('.title')?.textContent === ${JSON.stringify(delTitle)}); item.querySelector('button[aria-label="Delete"]').click(); await T.sleep(300);`);
     t('deleting the burst ship ends the burst', S().burst === null && !S().ships.some((s) => s.id === delId));
     t('and still logs it', S().history[0]?.shipId === delId);
     await js(`await T.tab('Burst');`);

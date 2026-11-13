@@ -7,6 +7,7 @@ import { useKeydown } from '../lib/keys';
 import { offerUndo } from '../lib/undo';
 import type { CardData } from '../lib/shareCard';
 import ShareDialog from './ShareDialog';
+import IconButton from '../lib/IconButton';
 
 interface Props {
   state: AppState;
@@ -305,15 +306,9 @@ function LogRow({
       </div>
       {!editing && (
         <div className="actions">
-          <button className="btn sm primary" title="Make an image for LinkedIn or X" onClick={onShare}>
-            Share
-          </button>
-          <button className="btn sm" onClick={onEdit}>
-            Edit
-          </button>
-          <button className="btn sm ghost danger" title="Remove from the log" onClick={onRemove}>
-            Delete
-          </button>
+          <IconButton icon="share" label="Share" tone="accent" onClick={onShare} />
+          <IconButton icon="edit" label="Edit" onClick={onEdit} />
+          <IconButton icon="delete" label="Delete" tone="danger" onClick={onRemove} />
         </div>
       )}
     </div>

@@ -3,6 +3,7 @@ import type { AppState, IdeaTag } from '../../shared/types';
 import { EMPTY_IDEA_MESSAGE, FOMO_TEMPLATE, IDEA_TAGS, TAG_LABELS } from '../../shared/types';
 import { fmtDate } from '../lib/hooks';
 import { offerUndo } from '../lib/undo';
+import IconButton from '../lib/IconButton';
 
 interface Props {
   state: AppState;
@@ -232,22 +233,15 @@ export default function Inbox({ state, flash, goShrink, focusSignal }: Props) {
                 <button className="btn sm primary" onClick={() => goShrink(idea.id)}>
                   Shrink
                 </button>
-                <button
-                  className="btn sm"
-                  title="Edit idea"
-                  onClick={() => startEdit(idea)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="btn sm ghost danger"
-                  title="Delete idea"
+                <IconButton icon="edit" label="Edit" onClick={() => startEdit(idea)} />
+                <IconButton
+                  icon="delete"
+                  label="Delete"
+                  tone="danger"
                   onClick={() => {
                     void window.burst.ideas.remove(idea.id).then(() => offerUndo('Idea deleted.'));
                   }}
-                >
-                  &#10005;
-                </button>
+                />
               </div>
             </div>
           ),
