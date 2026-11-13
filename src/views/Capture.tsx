@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { IdeaTag } from '../../shared/types';
-import { FOMO_TEMPLATE } from '../../shared/types';
+import { EMPTY_IDEA_MESSAGE, FOMO_TEMPLATE, IDEA_TAGS, TAG_LABELS } from '../../shared/types';
 import Mark from '../lib/Mark';
 
 /** The tiny always-on-top window opened by the global hotkey or the tray. */
@@ -21,7 +21,7 @@ export default function Capture() {
 
   async function save() {
     if (!text.trim()) {
-      setError('Needs a few words.');
+      setError(EMPTY_IDEA_MESSAGE);
       return;
     }
     const res = await window.burst.ideas.add({ text, sourceLink: link, tag });
@@ -78,12 +78,11 @@ export default function Capture() {
           }}
         />
         <div className="seg-toggle" style={{ marginTop: 4 }}>
-          <button className={tag === 'own' ? 'on' : ''} onClick={() => setTag('own')}>
-            Own idea
-          </button>
-          <button className={tag === 'fomo' ? 'on' : ''} onClick={() => setTag('fomo')}>
-            FOMO
-          </button>
+          {IDEA_TAGS.map((t) => (
+            <button key={t} className={tag === t ? 'on' : ''} onClick={() => setTag(t)}>
+              {t === 'own' ? 'Own idea' : TAG_LABELS[t]}
+            </button>
+          ))}
         </div>
         {tag === 'fomo' && text.trim() && (
           <p className="hint" style={{ marginTop: 8, marginBottom: 0 }}>

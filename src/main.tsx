@@ -11,6 +11,8 @@ function route(): string {
   return window.location.hash.replace(/^#/, '') || '/';
 }
 
+if (route() === '/mini') document.documentElement.classList.add('is-mini');
+
 function Root() {
   const r = route();
   if (r === '/capture') return <Capture />;

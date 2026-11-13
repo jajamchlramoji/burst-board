@@ -1,18 +1,27 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AppState, IdeaTag } from '../../shared/types';
-import { FOMO_TEMPLATE } from '../../shared/types';
+import { EMPTY_IDEA_MESSAGE, FOMO_TEMPLATE, IDEA_TAGS, TAG_LABELS } from '../../shared/types';
 import { fmtDate } from '../lib/hooks';
+import { offerUndo } from '../lib/undo';
 
 interface Props {
   state: AppState;
   flash: (msg: string | null) => void;
   goShrink: (ideaId?: string) => void;
+  /** Bumped by the "New idea" shortcut to put the cursor in the capture line. */
+  focusSignal: number;
 }
 
-export default function Inbox({ state, flash, goShrink }: Props) {
+export default function Inbox({ state, flash, goShrink, focusSignal }: Props) {
   const [text, setText] = useState('');
   const [link, setLink] = useState('');
   const [tag, setTag] = useState<IdeaTag>('own');
+  const [showLink, setShowLink] = useState(false);
+  const lineRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (focusSignal > 0) lineRef.current?.focus();
+  }, [focusSignal]);
 
   // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -25,7 +34,8 @@ export default function Inbox({ state, flash, goShrink }: Props) {
 
   async function add() {
     if (!text.trim()) {
-      flash('Type the idea first.');
+      flash(EMPTY_IDEA_MESSAGE);
+      lineRef.current?.focus();
       return;
     }
     const res = await window.burst.ideas.add({ text, sourceLink: link, tag });
@@ -36,6 +46,8 @@ export default function Inbox({ state, flash, goShrink }: Props) {
     setText('');
     setLink('');
     setTag('own');
+    setShowLink(false);
+    lineRef.current?.focus();
     flash('Captured. Back to what you were doing.');
   }
 
@@ -73,58 +85,67 @@ export default function Inbox({ state, flash, goShrink }: Props) {
       <h1>Inbox</h1>
       <p className="sub">
         Dump it here and move on. Nothing in this list is a commitment.
-        {' '}Press <strong>&#8984;&#8679;B</strong> from anywhere for the quick capture window.
+        {' '}<kbd>&#8984;N</kbd> jumps here, <kbd>&#8984;&#8679;B</kbd> captures from any app.
       </p>
 
-      <div className="card">
-        <label className="field">
-          <span className="label">
-            Idea <span className="req">*</span>
-          </span>
-          <textarea
+      <div className="capture-box">
+        <div className="capture-line">
+          <input
+            ref={lineRef}
+            type="text"
             value={text}
-            placeholder="A thing you might ship..."
+            aria-label="Idea"
+            placeholder="Capture an idea…"
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void add();
+              if (e.key === 'Enter') void add();
+              if (e.key === 'Escape') e.currentTarget.blur();
             }}
           />
-        </label>
+          <button
+            className={`chip ${tag}`}
+            title="Where it came from: your own idea, something you saw online, or other. Click to change."
+            onClick={() => setTag(IDEA_TAGS[(IDEA_TAGS.indexOf(tag) + 1) % IDEA_TAGS.length])}
+          >
+            {TAG_LABELS[tag]}
+          </button>
+          <button
+            className={`icon-btn ${showLink || link ? 'on' : ''}`}
+            title="Add a source link"
+            aria-label="Add a source link"
+            aria-pressed={showLink}
+            onClick={() => setShowLink(!showLink)}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M6.5 9.5a3 3 0 0 0 4.2 0l2.1-2.1a3 3 0 0 0-4.2-4.2l-.7.7M9.5 6.5a3 3 0 0 0-4.2 0L3.2 8.6a3 3 0 0 0 4.2 4.2l.7-.7" />
+            </svg>
+          </button>
+          <button className="btn primary sm" onClick={() => void add()}>
+            Capture
+          </button>
+        </div>
 
-        <label className="field">
-          <span className="label">Source link (optional)</span>
-          <input
-            type="text"
-            value={link}
-            placeholder="https://..."
-            onChange={(e) => setLink(e.target.value)}
-          />
-        </label>
-
-        <label className="field">
-          <span className="label">Where did it come from?</span>
-          <div className="seg-toggle">
-            <button className={tag === 'own' ? 'on' : ''} onClick={() => setTag('own')}>
-              My own idea
-            </button>
-            <button className={tag === 'fomo' ? 'on' : ''} onClick={() => setTag('fomo')}>
-              FOMO (saw it online)
-            </button>
-          </div>
-        </label>
-
-        {tag === 'fomo' && text.trim() && (
-          <div className="banner info">
-            This will be shrunk as: <strong>{FOMO_TEMPLATE(text.trim())}</strong>
+        {showLink && (
+          <div className="capture-extra">
+            <input
+              type="text"
+              autoFocus
+              value={link}
+              aria-label="Source link"
+              placeholder="Source link, https://…"
+              onChange={(e) => setLink(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void add();
+              }}
+            />
           </div>
         )}
 
-        <div className="btn-row">
-          <button className="btn primary big" onClick={() => void add()}>
-            Capture idea
-          </button>
-          <span className="hint">&#8984;&#9166; also saves</span>
-        </div>
+        {tag === 'fomo' && text.trim() && (
+          <div className="capture-extra hint">
+            Shrinks as: <strong>{FOMO_TEMPLATE(text.trim())}</strong>
+          </div>
+        )}
       </div>
 
       <h2>
@@ -169,12 +190,11 @@ export default function Inbox({ state, flash, goShrink }: Props) {
               <label className="field">
                 <span className="label">Where did it come from?</span>
                 <div className="seg-toggle">
-                  <button className={editTag === 'own' ? 'on' : ''} onClick={() => setEditTag('own')}>
-                    My own idea
-                  </button>
-                  <button className={editTag === 'fomo' ? 'on' : ''} onClick={() => setEditTag('fomo')}>
-                    FOMO (saw it online)
-                  </button>
+                  {IDEA_TAGS.map((t) => (
+                    <button key={t} className={editTag === t ? 'on' : ''} onClick={() => setEditTag(t)}>
+                      {TAG_LABELS[t]}
+                    </button>
+                  ))}
                 </div>
               </label>
 
@@ -193,7 +213,7 @@ export default function Inbox({ state, flash, goShrink }: Props) {
               <div className="body">
                 <div className="title">{idea.text}</div>
                 <div className="meta">
-                  <span className={`pill ${idea.tag}`}>{idea.tag === 'fomo' ? 'FOMO' : 'Own idea'}</span>
+                  <span className={`pill ${idea.tag}`}>{idea.tag === 'own' ? 'Own idea' : TAG_LABELS[idea.tag]}</span>
                   <span>{fmtDate(idea.createdAt)}</span>
                   {idea.sourceLink && (
                     <a
@@ -223,8 +243,7 @@ export default function Inbox({ state, flash, goShrink }: Props) {
                   className="btn sm ghost danger"
                   title="Delete idea"
                   onClick={() => {
-                    void window.burst.ideas.remove(idea.id);
-                    flash('Deleted. No guilt.');
+                    void window.burst.ideas.remove(idea.id).then(() => offerUndo('Idea deleted.'));
                   }}
                 >
                   &#10005;

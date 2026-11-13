@@ -35,6 +35,7 @@ const api: BurstApi = {
     park: (id, blockedReason) => ipcRenderer.invoke('ship:park', { id, blockedReason }),
     unpark: (id) => ipcRenderer.invoke('ship:unpark', id),
     remove: (id) => ipcRenderer.invoke('ship:delete', id),
+    toInbox: (id) => ipcRenderer.invoke('ship:toInbox', id),
     addUrl: (id, url) => ipcRenderer.invoke('ship:addUrl', { id, url }),
     removeUrl: (id, url) => ipcRenderer.invoke('ship:removeUrl', { id, url }),
   },
@@ -58,6 +59,9 @@ const api: BurstApi = {
   openExternal: (url) => ipcRenderer.invoke('shell:open', url),
   openCapture: () => ipcRenderer.invoke('window:openCapture'),
   closeCapture: () => ipcRenderer.invoke('window:closeCapture'),
+  showMain: () => ipcRenderer.invoke('window:showMain'),
+  undo: () => ipcRenderer.invoke('app:undo'),
+  moveMini: (dx, dy) => ipcRenderer.send('window:moveMini', dx, dy),
   exportMarkdown: () => ipcRenderer.invoke('export:markdown'),
 };
 

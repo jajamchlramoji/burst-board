@@ -1,6 +1,10 @@
 /** Shared data model. Used by both the Electron main process and the React UI. */
 
-export type IdeaTag = 'own' | 'fomo';
+export type IdeaTag = 'own' | 'fomo' | 'other';
+
+export const IDEA_TAGS: IdeaTag[] = ['own', 'fomo', 'other'];
+export const TAG_LABELS: Record<IdeaTag, string> = { own: 'Own', fomo: 'FOMO', other: 'Other' };
+export const EMPTY_IDEA_MESSAGE = "Don't be shy, this is a safe space.";
 export type IdeaStatus = 'inbox' | 'shrunk';
 
 export interface Idea {

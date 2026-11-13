@@ -174,25 +174,45 @@ export function setMiniTimer(on: boolean): void {
     miniWindow.show();
     return;
   }
+  // Transparent and a little larger than the card it draws, so the round hide
+  // button can sit half outside the card's corner.
+  // A panel, not a normal window: it floats over full-screen apps without
+  // getting a full-screen space of its own.
   const win = new BrowserWindow({
-    width: 208,
-    height: 116,
+    type: 'panel',
+    width: 236,
+    height: 144,
     resizable: false,
+    fullscreenable: false,
     frame: false,
+    transparent: true,
+    hasShadow: false,
     show: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     maximizable: false,
     minimizable: false,
-    backgroundColor: chromeColor(),
+    backgroundColor: '#00000000',
     webPreferences: rendererPrefs(),
   });
   win.setAlwaysOnTop(true, 'floating');
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // skipTransformProcessType: without it Electron turns the whole app into a
+  // background agent to float over full-screen apps, and the Dock icon vanishes.
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   win.once('ready-to-show', () => {
     const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-    win.setPosition(workArea.x + workArea.width - 228, workArea.y + 20);
-    win.show();
+    win.setPosition(workArea.x + workArea.width - 252, workArea.y + 8);
+    win.showInactive();
+    // The mini timer stands in for the app while it is up. A full-screen
+    // window cannot be minimized cleanly, so that one stays where it is.
+    if (
+      mainWindow &&
+      !mainWindow.isDestroyed() &&
+      !mainWindow.isMinimized() &&
+      !mainWindow.isFullScreen()
+    ) {
+      mainWindow.minimize();
+    }
   });
   win.on('closed', () => {
     miniWindow = null;
@@ -282,6 +302,10 @@ app.whenReady().then(() => {
     applyHotkey,
     applyTheme,
     startBurstFlow,
+    showMain: () => {
+      app.focus({ steal: true });
+      showMainWindow('burst');
+    },
   });
 
   // Before any window reads it: yesterday's burst should not block today's.

@@ -41,6 +41,8 @@ export interface BurstApi {
     park: (id: string, blockedReason: string) => Promise<Reply>;
     unpark: (id: string) => Promise<Reply>;
     remove: (id: string) => Promise<Reply>;
+    /** Remove from the board and return its idea to the Inbox. */
+    toInbox: (id: string) => Promise<Reply>;
     addUrl: (id: string, url: string) => Promise<Reply>;
     removeUrl: (id: string, url: string) => Promise<Reply>;
   };
@@ -63,5 +65,11 @@ export interface BurstApi {
   openExternal: (url: string) => Promise<boolean>;
   openCapture: () => Promise<void>;
   closeCapture: () => Promise<void>;
+  /** Bring the main window forward, on the Burst tab. */
+  showMain: () => Promise<void>;
+  /** Put back what the last delete removed. */
+  undo: () => Promise<Reply>;
+  /** Drag the mini timer window by this many pixels. */
+  moveMini: (dx: number, dy: number) => void;
   exportMarkdown: () => Promise<ExportResult>;
 }

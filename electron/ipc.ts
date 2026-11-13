@@ -13,7 +13,13 @@ import type {
   Ship,
   ShipWhere,
 } from '../shared/types';
-import { FOMO_TEMPLATE, MAX_ACTIVE_SHIPS, WHERE_LABELS } from '../shared/types';
+import {
+  EMPTY_IDEA_MESSAGE,
+  FOMO_TEMPLATE,
+  IDEA_TAGS,
+  MAX_ACTIVE_SHIPS,
+  WHERE_LABELS,
+} from '../shared/types';
 
 export type { Reply };
 
@@ -28,6 +34,7 @@ export interface IpcHooks {
   applyHotkey?: () => void;
   applyTheme?: () => void;
   startBurstFlow?: () => void;
+  showMain?: () => void;
 }
 
 export { isPublicUrl, normalizeUrl };
@@ -60,7 +67,7 @@ function ideaPatch(raw: unknown): Partial<Idea> {
   if (text) out.text = text;
   const link = str(p.sourceLink);
   if (link !== undefined) out.sourceLink = link.trim();
-  if (p.tag === 'own' || p.tag === 'fomo') out.tag = p.tag as IdeaTag;
+  if (IDEA_TAGS.includes(p.tag as IdeaTag)) out.tag = p.tag as IdeaTag;
   if (p.status === 'inbox' || p.status === 'shrunk') out.status = p.status as IdeaStatus;
   return out;
 }
@@ -162,12 +169,12 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
   ipcMain.handle('idea:add', (_e, input: unknown): Reply => {
     const p = (input ?? {}) as Record<string, unknown>;
     const text = (str(p.text) ?? '').trim();
-    if (!text) return fail('An idea needs at least a few words.');
+    if (!text) return fail(EMPTY_IDEA_MESSAGE);
     const idea: Idea = {
       id: Store.id(),
       text,
       sourceLink: (str(p.sourceLink) ?? '').trim(),
-      tag: p.tag === 'fomo' ? 'fomo' : 'own',
+      tag: IDEA_TAGS.includes(p.tag as IdeaTag) ? (p.tag as IdeaTag) : 'own',
       status: 'inbox',
       createdAt: new Date().toISOString(),
     };
@@ -188,10 +195,31 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
     return ok();
   });
 
+  // One level of undo for the destructive actions: each one records how to
+  // put back exactly what it took away.
+  let undo: ((s: AppState) => void) | null = null;
+
+  const restoreAt = <T extends { id: string }>(list: T[], item: T, index: number) => {
+    if (!list.some((x) => x.id === item.id)) list.splice(Math.min(index, list.length), 0, item);
+  };
+
+  ipcMain.handle('app:undo', (): Reply => {
+    const run = undo;
+    if (!run) return fail('Nothing to undo.');
+    undo = null;
+    store.update(run);
+    return ok();
+  });
+
   ipcMain.handle('idea:delete', (_e, id: string): Reply => {
+    const ideas = store.get().ideas;
+    const index = ideas.findIndex((i) => i.id === id);
+    if (index === -1) return ok();
+    const removed = structuredClone(ideas[index]);
     store.update((s) => {
       s.ideas = s.ideas.filter((i) => i.id !== id);
     });
+    undo = (s) => restoreAt(s.ideas, removed, index);
     return ok();
   });
 
@@ -279,9 +307,56 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
       finishBurst(store, 'parked');
       hooks.setMiniTimer?.(false);
     }
+    const index = store.get().ships.findIndex((x) => x.id === id);
+    if (index === -1) return ok();
+    const removed = structuredClone(store.get().ships[index]);
     store.update((s) => {
       s.ships = s.ships.filter((x) => x.id !== id);
     });
+    undo = (s) => restoreAt(s.ships, removed, index);
+    return ok();
+  });
+
+  // Takes a ship off the board and puts its idea back in the Inbox: the idea
+  // it came from if that still exists, otherwise a new one from its title.
+  // Its burst history stays, since that time was really spent.
+  ipcMain.handle('ship:toInbox', (_e, id: string): Reply => {
+    if (store.get().burst?.shipId === id) {
+      finishBurst(store, 'parked');
+      hooks.setMiniTimer?.(false);
+    }
+    const state = store.get();
+    const index = state.ships.findIndex((x) => x.id === id);
+    if (index === -1) return fail('That ship is gone.');
+    const ship = structuredClone(state.ships[index]);
+    const source = ship.ideaId ? state.ideas.find((i) => i.id === ship.ideaId) : undefined;
+    const prevStatus = source?.status;
+    const created: Idea | null = source
+      ? null
+      : {
+          id: Store.id(),
+          text: ship.title,
+          sourceLink: '',
+          tag: 'own',
+          status: 'inbox',
+          createdAt: new Date().toISOString(),
+        };
+    store.update((s) => {
+      s.ships = s.ships.filter((x) => x.id !== id);
+      if (created) s.ideas.unshift(created);
+      else {
+        const idea = s.ideas.find((i) => i.id === ship.ideaId);
+        if (idea) idea.status = 'inbox';
+      }
+    });
+    undo = (s) => {
+      restoreAt(s.ships, ship, index);
+      if (created) s.ideas = s.ideas.filter((i) => i.id !== created.id);
+      else {
+        const idea = s.ideas.find((i) => i.id === ship.ideaId);
+        if (idea && prevStatus) idea.status = prevStatus;
+      }
+    };
     return ok();
   });
 
@@ -308,7 +383,15 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
   ipcMain.handle('ship:removeUrl', (_e, input: { id: string; url: string }): Reply => {
     store.update((s) => {
       const ship = s.ships.find((x) => x.id === input.id);
-      if (ship) ship.urls = ship.urls.filter((u) => u !== input.url);
+      if (!ship) return;
+      ship.urls = ship.urls.filter((u) => u !== input.url);
+      // The link is what made it shipped. Taking the last one back during the
+      // burst (a typo'd link, say) undoes the ship so it can be shipped again.
+      if (ship.urls.length === 0 && s.burst?.shipId === ship.id && s.burst.shipped) {
+        s.burst.shipped = false;
+        ship.status = 'active';
+        ship.shippedAt = null;
+      }
     });
     return ok();
   });
@@ -441,6 +524,19 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
 
   ipcMain.handle('window:closeCapture', () => {
     hooks.closeCapture?.();
+  });
+
+  ipcMain.handle('window:showMain', () => {
+    hooks.showMain?.();
+  });
+
+  // Only ever moves the window that asked, by a small step.
+  ipcMain.on('window:moveMini', (e, dx: unknown, dy: unknown) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win || typeof dx !== 'number' || typeof dy !== 'number') return;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.abs(dx) > 400 || Math.abs(dy) > 400) return;
+    const [x, y] = win.getPosition();
+    win.setPosition(Math.round(x + dx), Math.round(y + dy));
   });
 
   ipcMain.handle('export:markdown', async () => {

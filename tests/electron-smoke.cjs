@@ -121,9 +121,9 @@ app.whenReady().then(async () => {
   await new Promise((r) => setTimeout(r, 250));
   const lightBg = await js('getComputedStyle(document.body).backgroundColor');
   const lightText = await js('getComputedStyle(document.body).color');
-  t('dark theme paints the dark background', darkBg === 'rgb(11, 13, 18)', darkBg);
-  t('light theme repaints from the light palette', lightBg === 'rgb(245, 247, 251)', lightBg);
-  t('light theme uses dark text', lightText === 'rgb(20, 26, 40)', lightText);
+  t('dark theme paints the dark background', darkBg === 'rgb(43, 45, 49)', darkBg);
+  t('light theme repaints from the light palette', lightBg === 'rgb(244, 245, 246)', lightBg);
+  t('light theme uses dark text', lightText === 'rgb(43, 45, 49)', lightText);
   nativeTheme.themeSource = 'dark';
 
   await js("window.burst.settings.update({ theme: 'light' })");

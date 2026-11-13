@@ -24,6 +24,7 @@ export function buildAppMenu(deps: MenuDeps): void {
         // No accelerator here on purpose: CmdOrCtrl+Shift+B is registered as a
         // global shortcut, and listing it twice can fire the window twice.
         { label: 'Capture idea  (⌘⇧B)', click: () => deps.openCapture() },
+        { label: 'New idea in Inbox', accelerator: 'CmdOrCtrl+N', click: () => deps.showMain('new-idea') },
         { label: 'Start a burst', accelerator: 'CmdOrCtrl+B', click: () => deps.startBurst() },
         { type: 'separator' },
         {
@@ -44,6 +45,11 @@ export function buildAppMenu(deps: MenuDeps): void {
         { label: 'Ship log', accelerator: 'CmdOrCtrl+5', click: () => deps.showMain('log') },
         { type: 'separator' },
         { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: () => deps.showMain('settings') },
+        {
+          label: 'Keyboard shortcuts',
+          accelerator: 'CmdOrCtrl+/',
+          click: () => deps.showMain('shortcuts'),
+        },
       ],
     },
     { role: 'editMenu' },

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AppState } from '../../shared/types';
 import { WHERE_LABELS } from '../../shared/types';
 import {
@@ -14,6 +14,11 @@ import {
   phaseOf,
 } from '../../shared/burst';
 import { useNow } from '../lib/hooks';
+import { isTyping, useKeydown } from '../lib/keys';
+import { primeAudio, swoosh } from '../lib/sound';
+import { confetti } from '../lib/confetti';
+
+const CELEBRATE_MS = 1100;
 
 interface Props {
   state: AppState;
@@ -36,6 +41,31 @@ export default function Burst({ state, flash, goSpin }: Props) {
   const [endConfirm, setEndConfirm] = useState(false);
   const [parkReason, setParkReason] = useState('');
   const [shipOpen, setShipOpen] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [addingLink, setAddingLink] = useState(false);
+  const liveBtn = useRef<HTMLButtonElement>(null);
+  const celebrateTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(celebrateTimer.current), []);
+
+  useKeydown((e) => {
+    if (!burst || celebrating) return;
+    if (e.key === 's' && e.metaKey) {
+      e.preventDefault();
+      if (burst.shipped) setEndConfirm(true);
+      else if (!endConfirm) setShipOpen(true);
+    } else if (e.key === 'Escape') {
+      setShipOpen(false);
+      if (endConfirm) {
+        setEndConfirm(false);
+        setParkReason('');
+      }
+    } else if (e.key === ' ' && !isTyping(e) && !document.querySelector('.modal')) {
+      e.preventDefault();
+      void (burst.pausedAt ? window.burst.burst.resume() : window.burst.burst.pause());
+    }
+  });
 
   if (!burst || !ship) {
     return (
@@ -75,18 +105,31 @@ export default function Burst({ state, flash, goSpin }: Props) {
   // restart instead of snapping the modal straight back.
   const snoozedUntil = burst.snoozeUntil ? new Date(burst.snoozeUntil).getTime() : 0;
   const showCheckpoint = checkpointDue && now > snoozedUntil && !paused;
-  const showShip = !burst.shipped && !endConfirm && (shipOpen || showCheckpoint);
+  const showShip =
+    celebrating || sending || (!burst.shipped && !endConfirm && (shipOpen || showCheckpoint));
   const logDue = ms >= LOG_PROMPT_MS;
 
   const shipNow = async (raw: string) => {
+    if (celebrating || sending) return;
+    primeAudio();
+    // Measure now: the shipped state can arrive before this call returns,
+    // and the dialog must not vanish under the celebration.
+    const from = liveBtn.current?.getBoundingClientRect();
+    setSending(true);
     const res = await window.burst.burst.shipNow(raw);
+    setSending(false);
     if (!res.ok) {
       flash(res.error);
       return;
     }
+    if (from) confetti(from);
+    swoosh();
+    setCelebrating(true);
     setUrlDraft('');
-    setShipOpen(false);
-    flash('Shipped. That counts, however ugly.');
+    celebrateTimer.current = window.setTimeout(() => {
+      setCelebrating(false);
+      setShipOpen(false);
+    }, CELEBRATE_MS);
   };
 
   const addUrl = async () => {
@@ -96,14 +139,20 @@ export default function Burst({ state, flash, goSpin }: Props) {
       return;
     }
     setExtraUrl('');
-    flash('Added.');
+    setAddingLink(false);
   };
 
-  const saveLog = async () => {
-    await window.burst.ships.update(ship.id, { win, v2 });
-    await window.burst.burst.ackLogPrompt();
-    flash('Logged.');
+  const removeUrl = async (u: string) => {
+    const res = await window.burst.ships.removeUrl(ship.id, u);
+    if (!res.ok) flash(res.error);
+    else if (ship.urls.length === 1) flash('Link removed. Not shipped until a link is back.');
   };
+
+  const hint = paused
+    ? 'Paused. The clock waits for you.'
+    : burst.shipped && phase !== 'log' && phase !== 'done'
+      ? 'Shipped. Polish and reship, or finish whenever you like.'
+      : PHASE_HINT[phase];
 
   const end = async (outcome: 'shipped' | 'parked') => {
     if (outcome === 'parked' && !burst.shipped && !parkReason.trim()) {
@@ -122,20 +171,14 @@ export default function Burst({ state, flash, goSpin }: Props) {
   };
 
   return (
-    <div className="wrap wide">
+    <div className="wrap burst">
       <div className="burst-head">
         <div className="phase-name">{PHASE_LABEL[phase]}</div>
         <div className={`clock ${paused ? 'paused' : ''}`}>{formatClock(ms)}</div>
-        <div className="phase-hint">
-          {paused
-            ? 'Paused. The clock waits for you.'
-            : burst.shipped && phase === 'build'
-              ? 'Shipped. Polish and reship, or finish whenever you like.'
-              : PHASE_HINT[phase]}
-        </div>
+        <div className="phase-hint">{hint}</div>
       </div>
 
-      <div className="track">
+      <div className="track" title={`${formatShort(remaining)} left in the burst`}>
         {PHASE_SEGMENTS.map((seg) => {
           const span = seg.to - seg.from;
           const done = Math.min(Math.max(ms - seg.from, 0), span);
@@ -151,153 +194,122 @@ export default function Burst({ state, flash, goSpin }: Props) {
           );
         })}
       </div>
-      <div className="track-labels">
-        <span>0:00 scope</span>
-        <span>0:15 build</span>
-        <span>2:00 ship</span>
-        <span>3:50 log</span>
-        <span>4:00</span>
-      </div>
 
-      <div className="scope-card">
-        <div className="k">{ship.title}</div>
-        <div className="v">{ship.liveIn2h}</div>
-        {ship.uglyV1 && (
-          <>
-            <div className="k" style={{ marginTop: 14 }}>
-              Ugly v1 is
-            </div>
-            <div className="v small">{ship.uglyV1}</div>
-          </>
-        )}
-        <div className="meta" style={{ marginTop: 14, fontSize: 12.5, color: 'var(--muted-2)' }}>
-          Shipping to {WHERE_LABELS[ship.where]}
+      <div className="burst-ship">
+        <div className="burst-title">{ship.title}</div>
+        <div className="burst-goal">{ship.liveIn2h}</div>
+        <div className="burst-meta">
+          {WHERE_LABELS[ship.where]}
           {ship.where === 'other' && ship.whereOther ? `: ${ship.whereOther}` : ''}
           {' · '}
-          {formatShort(remaining)} left in the burst
+          {formatShort(remaining)} left
+        </div>
+
+        {burst.shipped && (
+          <div className="link-chips">
+            {ship.urls.map((u) => (
+              <span className="link-chip" key={u}>
+                <a
+                  href="#"
+                  title={u}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void window.burst.openExternal(u);
+                  }}
+                >
+                  {u.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                </a>
+                <button aria-label={`Remove ${u}`} title="Remove link" onClick={() => void removeUrl(u)}>
+                  &#10005;
+                </button>
+              </span>
+            ))}
+            {addingLink ? (
+              <input
+                className="link-add"
+                type="text"
+                autoFocus
+                value={extraUrl}
+                aria-label="Another public link"
+                placeholder="https://… then Enter"
+                onChange={(e) => setExtraUrl(e.target.value)}
+                onBlur={() => !extraUrl && setAddingLink(false)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void addUrl();
+                  if (e.key === 'Escape') {
+                    setExtraUrl('');
+                    setAddingLink(false);
+                  }
+                }}
+              />
+            ) : (
+              <button className="link-chip add" onClick={() => setAddingLink(true)}>
+                + Add link
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="burst-actions">
+        <div className="btn-row">
+          <button
+            className="btn ghost"
+            onClick={() => void (paused ? window.burst.burst.resume() : window.burst.burst.pause())}
+          >
+            {paused ? 'Resume' : 'Pause'}
+          </button>
+          <button
+            className="btn ghost"
+            onClick={() => void window.burst.burst.setMini(!burst.miniTimer)}
+          >
+            {burst.miniTimer ? 'Hide mini' : 'Mini timer'}
+          </button>
+        </div>
+        <div className="btn-row">
+          {burst.shipped ? (
+            <button className="btn primary big" onClick={() => setEndConfirm(true)}>
+              Finish &amp; log
+            </button>
+          ) : (
+            <>
+              <button className="btn ghost" onClick={() => setEndConfirm(true)}>
+                End burst
+              </button>
+              <button className="btn primary big" onClick={() => setShipOpen(true)}>
+                Ship it
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="btn-row">
-        {paused ? (
-          <button className="btn primary big" onClick={() => void window.burst.burst.resume()}>
-            Resume
-          </button>
-        ) : (
-          <button className="btn big" onClick={() => void window.burst.burst.pause()}>
-            Pause
-          </button>
-        )}
-        <button
-          className="btn big"
-          onClick={() => void window.burst.burst.setMini(!burst.miniTimer)}
-        >
-          {burst.miniTimer ? 'Hide mini timer' : 'Mini timer on top'}
-        </button>
-        <div style={{ flex: 1 }} />
-        {burst.shipped ? (
-          <button className="btn primary big" onClick={() => setEndConfirm(true)}>
-            Finish &amp; log
-          </button>
-        ) : (
-          <>
-            <button className="btn big" onClick={() => setEndConfirm(true)}>
-              End burst
-            </button>
-            <button className="btn primary big" onClick={() => setShipOpen(true)}>
-              Ship it
-            </button>
-          </>
-        )}
-      </div>
-
-      {burst.shipped && (
-        <>
-          <h2>Shipped links</h2>
-          <div className="card">
-            {ship.urls.length === 0 ? (
-              <p className="hint">No links yet.</p>
-            ) : (
-              <div className="urls" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {ship.urls.map((u) => (
-                  <div
-                    key={u}
-                    style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}
-                  >
-                    <a
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        void window.burst.openExternal(u);
-                      }}
-                    >
-                      {u}
-                    </a>
-                    <button
-                      className="btn sm ghost danger"
-                      onClick={() => void window.burst.ships.removeUrl(ship.id, u)}
-                    >
-                      &#10005;
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="row tight" style={{ marginTop: 14 }}>
-              <input
-                type="text"
-                value={extraUrl}
-                placeholder="Add another public URL (reship, tweet, repo...)"
-                onChange={(e) => setExtraUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void addUrl();
-                }}
-              />
-              <button className="btn" style={{ flex: '0 0 auto' }} onClick={() => void addUrl()}>
-                Add
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {(logDue || burst.shipped) && (
-        <>
-          <h2>{logDue ? 'Final 10 minutes: log it' : 'Log it (whenever)'}</h2>
-          <div className="card">
-            <label className="field">
-              <span className="label">One-line win</span>
-              <input
-                type="text"
-                value={win}
-                placeholder="What actually went live?"
-                onChange={(e) => setWin(e.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span className="label">Possible v2</span>
-              <input
-                type="text"
-                value={v2}
-                placeholder="One thing you would do next time. Not a promise."
-                onChange={(e) => setV2(e.target.value)}
-              />
-            </label>
-            <button className="btn primary" onClick={() => void saveLog()}>
-              Save to log
-            </button>
-          </div>
-        </>
+      {logDue && !endConfirm && (
+        <p className="hint" style={{ textAlign: 'center', marginTop: 18 }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              setEndConfirm(true);
+            }}
+          >
+            {burst.shipped ? 'Finish and log your win' : 'Wrap it up'}
+          </a>
+        </p>
       )}
 
       {showShip && (
         <div className="modal-back">
-          <div className="modal">
-            <h3>{showCheckpoint ? 'Ship it now, ugly is fine.' : 'Ship it.'}</h3>
+          <div className={`modal ${celebrating ? 'shipped' : ''}`}>
+            <h3>
+              {celebrating ? 'Shipped.' : showCheckpoint ? 'Ship it now, ugly is fine.' : 'Ship it.'}
+            </h3>
             <p className="modal-sub">
-              {showCheckpoint
-                ? 'Two hours in. Put the ugly version somewhere public and paste the link. Ugly and live beats polished and private.'
-                : 'Paste the public link to what went live. That link is what makes it shipped.'}
+              {celebrating
+                ? 'That counts, however ugly.'
+                : showCheckpoint
+                  ? 'Two hours in. Put the ugly version somewhere public and paste the link. Ugly and live beats polished and private.'
+                  : 'Paste the public link to what went live. That link is what makes it shipped.'}
             </p>
             <label className="field">
               <span className="label">
@@ -316,8 +328,21 @@ export default function Burst({ state, flash, goSpin }: Props) {
               />
             </label>
             <div className="btn-row">
-              <button className="btn primary big" onClick={() => void shipNow(urlDraft)}>
-                It is live
+              <button
+                ref={liveBtn}
+                className={`btn primary big ${celebrating ? 'done' : ''}`}
+                onClick={() => void shipNow(urlDraft)}
+              >
+                {celebrating ? (
+                  <>
+                    <svg className="check" viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M3.5 8.5l3 3 6-7" />
+                    </svg>
+                    Live
+                  </>
+                ) : (
+                  'It is live'
+                )}
               </button>
               {showCheckpoint ? (
                 <button
@@ -355,12 +380,42 @@ export default function Burst({ state, flash, goSpin }: Props) {
       {endConfirm && (
         <div className="modal-back">
           <div className="modal">
-            <h3>{burst.shipped ? 'End the burst?' : 'End without shipping?'}</h3>
+            <h3>{burst.shipped ? 'Finish and log it.' : 'End without shipping?'}</h3>
             <p className="modal-sub">
               {burst.shipped
-                ? 'It is already shipped, so this goes in the log as a ship.'
+                ? 'Two lines for the ship log. Both are optional.'
                 : 'This goes down as parked. Not failed, not a streak break - just parked.'}
             </p>
+
+            {burst.shipped && (
+              <>
+                <label className="field">
+                  <span className="label">One-line win</span>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={win}
+                    placeholder="What actually went live?"
+                    onChange={(e) => setWin(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void end('shipped');
+                    }}
+                  />
+                </label>
+                <label className="field" style={{ marginBottom: 18 }}>
+                  <span className="label">Possible v2</span>
+                  <input
+                    type="text"
+                    value={v2}
+                    placeholder="One thing you would do next time. Not a promise."
+                    onChange={(e) => setV2(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void end('shipped');
+                    }}
+                  />
+                </label>
+              </>
+            )}
 
             {/* Blocker reason required when parking without having shipped */}
             {!burst.shipped && (
@@ -391,7 +446,7 @@ export default function Burst({ state, flash, goSpin }: Props) {
                 className="btn primary big"
                 onClick={() => void end(burst.shipped ? 'shipped' : 'parked')}
               >
-                {burst.shipped ? 'End and log the ship' : 'Park it'}
+                {burst.shipped ? 'Log the ship' : 'Park it'}
               </button>
               <button className="btn" onClick={() => { setEndConfirm(false); setParkReason(''); }}>
                 Keep going

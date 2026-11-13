@@ -3,6 +3,8 @@ import type { AppState, Ship } from '../../shared/types';
 import { WHERE_LABELS } from '../../shared/types';
 import { burstDayCount, daysSinceLastBurst, shipStreak, shipsThisMonth } from '../../shared/burst';
 import { fmtDateTime } from '../lib/hooks';
+import { useKeydown } from '../lib/keys';
+import { offerUndo } from '../lib/undo';
 
 interface Props {
   state: AppState;
@@ -20,6 +22,22 @@ export default function ShipLog({ state, flash }: Props) {
   const sinceLast = daysSinceLastBurst(state.history);
   const [editing, setEditing] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [removing, setRemoving] = useState<Ship | null>(null);
+
+  useKeydown((e) => {
+    if (e.key === 'Escape' && removing) setRemoving(null);
+  });
+
+  async function remove(how: 'inbox' | 'delete') {
+    if (!removing) return;
+    const res =
+      how === 'inbox'
+        ? await window.burst.ships.toInbox(removing.id)
+        : await window.burst.ships.remove(removing.id);
+    setRemoving(null);
+    if (!res.ok) flash(res.error);
+    else offerUndo(how === 'inbox' ? 'Moved back to the Inbox.' : 'Deleted from the log.');
+  }
 
   const q = query.trim().toLowerCase();
   const visible = q
@@ -107,6 +125,7 @@ export default function ShipLog({ state, flash }: Props) {
             ship={s}
             editing={editing === s.id}
             onEdit={() => setEditing(editing === s.id ? null : s.id)}
+            onRemove={() => setRemoving(s)}
             flash={flash}
           />
         ))
@@ -131,6 +150,32 @@ export default function ShipLog({ state, flash }: Props) {
           ))}
         </>
       )}
+
+      {removing && (
+        <div className="modal-back" onClick={() => setRemoving(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Take “{removing.title}” off the log?</h3>
+            <p className="modal-sub">
+              Send it back to the Inbox to build again later, or delete it for good. Either way,
+              the burst time you spent on it stays in your history.
+            </p>
+            <div className="btn-row">
+              <button className="btn primary big" autoFocus onClick={() => void remove('inbox')}>
+                Back to Inbox
+              </button>
+              <button className="btn big danger" onClick={() => void remove('delete')}>
+                Delete permanently
+              </button>
+              <button className="btn ghost" onClick={() => setRemoving(null)}>
+                Cancel
+              </button>
+            </div>
+            <p className="hint" style={{ marginTop: 12, marginBottom: 0 }}>
+              You get a few seconds to undo after either one.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -139,11 +184,13 @@ function LogRow({
   ship,
   editing,
   onEdit,
+  onRemove,
   flash,
 }: {
   ship: Ship;
   editing: boolean;
   onEdit: () => void;
+  onRemove: () => void;
   flash: (m: string | null) => void;
 }) {
   const [win, setWin] = useState(ship.win);
@@ -240,6 +287,9 @@ function LogRow({
         <div className="actions">
           <button className="btn sm" onClick={onEdit}>
             Edit
+          </button>
+          <button className="btn sm ghost danger" title="Remove from the log" onClick={onRemove}>
+            Delete
           </button>
         </div>
       )}

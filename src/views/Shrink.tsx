@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { AppState, ShipWhere } from '../../shared/types';
-import { MAX_ACTIVE_SHIPS, WHERE_LABELS } from '../../shared/types';
+import { MAX_ACTIVE_SHIPS, TAG_LABELS, WHERE_LABELS } from '../../shared/types';
 import { suggestedTitleFor } from '../lib/title';
 import { fmtDate } from '../lib/hooks';
+import { offerUndo } from '../lib/undo';
 
 interface Props {
   state: AppState;
@@ -115,7 +116,7 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
             <option value="">Straight from my head</option>
             {inboxIdeas.map((i) => (
               <option key={i.id} value={i.id}>
-                {i.tag === 'fomo' ? '[FOMO] ' : ''}
+                {i.tag === 'own' ? '' : `[${TAG_LABELS[i.tag]}] `}
                 {i.text.slice(0, 70)}
               </option>
             ))}
@@ -237,8 +238,7 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
                   className="btn sm ghost danger"
                   title="Delete ship"
                   onClick={() => {
-                    void window.burst.ships.remove(s.id);
-                    flash('Deleted.');
+                    void window.burst.ships.remove(s.id).then(() => offerUndo('Ship deleted.'));
                   }}
                 >
                   &#10005;
@@ -313,7 +313,8 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
                 </button>
                 <button
                   className="btn sm ghost danger"
-                  onClick={() => void window.burst.ships.remove(s.id)}
+                  title="Delete ship"
+                  onClick={() => void window.burst.ships.remove(s.id).then(() => offerUndo('Ship deleted.'))}
                 >
                   &#10005;
                 </button>

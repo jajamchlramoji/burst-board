@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AppState, Ship } from '../../shared/types';
+import { isTyping, useKeydown } from '../lib/keys';
+import { land, primeAudio, tick } from '../lib/sound';
 
 interface Props {
   state: AppState;
@@ -80,7 +82,23 @@ export default function Spin({ state, flash }: Props) {
       fill: 'forwards',
     });
     anim.current = a;
+
+    // Click once for every name that crosses the payline.
+    let row = 0;
+    const listen = () => {
+      if (a.playState !== 'running') return;
+      const y = new DOMMatrix(getComputedStyle(el).transform).m42;
+      const now = Math.round(-y / ROW);
+      if (now !== row) {
+        row = now;
+        tick();
+      }
+      requestAnimationFrame(listen);
+    };
+    requestAnimationFrame(listen);
+
     a.onfinish = () => {
+      land(landing.used >= 2);
       pending.current = null;
       setPick(landing.ship);
       setStage(landing.used >= 2 ? 'locked' : 'picked');
@@ -89,7 +107,8 @@ export default function Spin({ state, flash }: Props) {
   }, [rollId, flash]);
 
   function roll() {
-    if (active.length === 0 || stage === 'rolling') return;
+    if (active.length <= 1 || stage === 'rolling' || stage === 'locked') return;
+    primeAudio();
     anim.current?.cancel();
     const chosen = active[Math.floor(Math.random() * active.length)];
     const showing = strip.length > 0 ? strip[strip.length - 2] : titles[0];
@@ -102,9 +121,21 @@ export default function Spin({ state, flash }: Props) {
     setRollId((n) => n + 1);
   }
 
+  useKeydown((e) => {
+    if (state.burst || document.querySelector('.modal')) return;
+    if (e.key === ' ' && !isTyping(e)) {
+      e.preventDefault();
+      roll();
+    } else if (e.key === 'Enter' && e.metaKey && (pick || active.length === 1)) {
+      e.preventDefault();
+      void start();
+    }
+  });
+
   async function start() {
-    if (!pick) return;
-    const res = await window.burst.burst.start(pick.id);
+    const target = pick ?? (active.length === 1 ? active[0] : null);
+    if (!target) return;
+    const res = await window.burst.burst.start(target.id);
     if (!res.ok) flash(res.error);
   }
 
@@ -137,6 +168,43 @@ export default function Spin({ state, flash }: Props) {
         <div className="empty">
           <strong>No active ships.</strong>
           Shrink an idea first, then come back and let the wheel choose.
+        </div>
+      </div>
+    );
+  }
+
+  if (active.length === 1) {
+    const only = active[0];
+    return (
+      <div className="wrap">
+        <h1>Spin</h1>
+        <p className="sub">Nothing to choose between. One ship on the board.</p>
+        <div className="spin-stage">
+          <div className="reel landed locked" style={{ ['--row' as string]: `${ROW}px` }}>
+            <i className="pointer l" aria-hidden="true" />
+            <i className="pointer r" aria-hidden="true" />
+            <div className="reel-strip">
+              <div className="reel-row" aria-hidden="true" />
+              <div className="reel-row win">{only.title}</div>
+              <div className="reel-row" aria-hidden="true" />
+            </div>
+          </div>
+          <p className="only-line">Only this one left. Let&rsquo;s go.</p>
+          <div className="scope-card" style={{ textAlign: 'left', width: '100%', maxWidth: 560 }}>
+            <div className="k">What will be live in 2 hours</div>
+            <div className="v">{only.liveIn2h}</div>
+            {only.uglyV1 && (
+              <>
+                <div className="k" style={{ marginTop: 14 }}>
+                  Ugly v1 is
+                </div>
+                <div className="v small">{only.uglyV1}</div>
+              </>
+            )}
+          </div>
+          <button className="btn primary huge" onClick={() => void start()}>
+            Start the burst
+          </button>
         </div>
       </div>
     );
