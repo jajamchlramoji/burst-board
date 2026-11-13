@@ -55,6 +55,7 @@
   --capture-bg:   #2b2d31;
   --mini-bg:      rgba(39, 41, 45, 0.95);
   --scrollbar:    #43464c;
+  --reel-shade:   rgba(36, 38, 42, 0.96);
 
   --shadow-card:
     0 1px 0 var(--hi) inset,
@@ -117,6 +118,7 @@
     --capture-bg:   #ffffff;
     --mini-bg:      rgba(255, 255, 255, 0.95);
     --scrollbar:    #c7c9cd;
+    --reel-shade:   rgba(236, 237, 240, 0.96);
 
     --shadow-card:
       0 1px 2px rgba(20, 24, 30, 0.05),
@@ -257,8 +259,7 @@ h2:first-child { margin-top: 0; }
 .card,
 .item,
 .stat,
-.scope-card,
-.spin-slot {
+.scope-card {
   background: linear-gradient(180deg, var(--hi), transparent 60%), var(--panel);
   border: 1px solid var(--hair);
   border-radius: var(--radius);
@@ -468,29 +469,81 @@ select { appearance: none; background-image: none; }
   gap: 22px;
   text-align: center;
 }
-.spin-slot {
+/* A three-row slot window: the middle row is the payline. */
+.reel {
+  --row: 76px;
+  position: relative;
   width: 100%;
   max-width: 560px;
-  height: 108px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 24px;
-  font-family: var(--serif);
-  font-size: 28px;
-  font-weight: 400;
+  height: calc(var(--row) * 3);
   overflow: hidden;
+  border-radius: var(--radius);
+  border: 1px solid var(--hair-2);
+  background: linear-gradient(var(--sunken), var(--sunken)), var(--panel);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.3s, border-color 0.3s;
 }
-.spin-slot.rolling { color: var(--muted); animation: jitter 0.09s infinite alternate; }
-.spin-slot.locked {
+/* Payline band, behind the names. */
+.reel::before {
+  content: '';
+  position: absolute;
+  inset: var(--row) 0 auto;
+  height: var(--row);
+  background: var(--accent-soft);
+  border-block: 1px solid var(--accent-line);
+  transition: background 0.3s;
+}
+/* Drum shading: the names curve away at the top and bottom. */
+.reel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    var(--reel-shade) 0%,
+    transparent 38%,
+    transparent 62%,
+    var(--reel-shade) 100%
+  );
+  z-index: 2;
+}
+.reel .pointer {
+  position: absolute;
+  top: calc(var(--row) * 1.5 - 7px);
+  width: 0;
+  height: 0;
+  border-block: 7px solid transparent;
+  z-index: 3;
+}
+.reel .pointer.l { left: 0; border-left: 9px solid var(--accent); }
+.reel .pointer.r { right: 0; border-right: 9px solid var(--accent); }
+.reel-strip { position: relative; z-index: 1; will-change: transform; }
+.reel-row {
+  height: var(--row);
+  line-height: var(--row);
+  padding: 0 34px;
+  text-align: center;
+  font-family: var(--serif);
+  font-size: 26px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reel.idle .reel-row:nth-child(2) { color: var(--text-2); }
+.reel-row.win { color: var(--text); animation: win-in 0.5s ease-out; }
+.reel.landed::before { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.reel.locked {
   border-color: var(--accent-line);
   box-shadow: var(--shadow-card), 0 0 0 4px var(--accent-soft), 0 10px 40px -10px var(--accent-glow);
 }
-@keyframes jitter {
-  from { transform: translateY(-3px); opacity: 0.6; }
-  to { transform: translateY(3px); opacity: 1; }
+.reel.locked .reel-row.win { color: var(--accent); }
+@keyframes win-in {
+  0% { text-shadow: 0 0 0 transparent; }
+  40% { text-shadow: 0 0 18px var(--accent-glow); }
+  100% { text-shadow: 0 0 0 transparent; }
 }
-.spin-slot .picked { color: var(--text); }
 
 /* ---------- Burst ---------- */
 .burst-head { text-align: center; padding: 12px 0 4px; position: relative; }

@@ -8,44 +8,98 @@ interface Props {
 
 type Stage = 'idle' | 'rolling' | 'picked' | 'locked';
 
-const ROLL_MS = 1500;
-const FRAME_MS = 85;
+const ROW = 76;
+const TRAVEL_ROWS = 30;
+const ROLL_MS = 3400;
+const RESPIN_MS = 2800;
+
+function pickOther(titles: string[], avoid: string): string {
+  const others = titles.filter((t) => t !== avoid);
+  const pool = others.length > 0 ? others : titles;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * The reel strip, top to bottom. Row 1 starts on the payline and row
+ * `TRAVEL_ROWS + 1` (the pick) ends there, with a neighbour above and below
+ * so the window always shows three names.
+ */
+function buildStrip(titles: string[], start: string, chosen: string): string[] {
+  const rows = [pickOther(titles, start), start];
+  const target = TRAVEL_ROWS + 1;
+  while (rows.length < target) {
+    let next = pickOther(titles, rows[rows.length - 1]);
+    if (rows.length === target - 1 && next === chosen) next = pickOther(titles, chosen);
+    rows.push(next);
+  }
+  rows.push(chosen, pickOther(titles, chosen));
+  return rows;
+}
+
+/** Wind back, accelerate with motion blur, coast, ease off, overshoot, snap back. */
+function reelKeyframes(end: number, reduced: boolean): Keyframe[] {
+  if (reduced) return [{ transform: 'translateY(0)' }, { transform: `translateY(${end}px)` }];
+  const at = (f: number) => `translateY(${end * f}px)`;
+  return [
+    { offset: 0, transform: 'translateY(0)', filter: 'blur(0)', easing: 'cubic-bezier(.4,0,.6,1)' },
+    { offset: 0.06, transform: `translateY(${ROW * 0.35}px)`, filter: 'blur(0)', easing: 'cubic-bezier(.5,0,1,1)' },
+    { offset: 0.2, transform: at(0.15), filter: 'blur(3px)', easing: 'linear' },
+    { offset: 0.55, transform: at(0.68), filter: 'blur(3px)', easing: 'cubic-bezier(.3,.5,.4,1)' },
+    { offset: 0.9, transform: `translateY(${end - ROW * 0.22}px)`, filter: 'blur(0)', easing: 'cubic-bezier(.3,0,.3,1)' },
+    { offset: 1, transform: `translateY(${end}px)`, filter: 'blur(0)' },
+  ];
+}
 
 export default function Spin({ state, flash }: Props) {
   const active = state.ships.filter((s) => s.status === 'active');
+  const titles = active.map((s) => s.title);
   const [stage, setStage] = useState<Stage>('idle');
   const [spins, setSpins] = useState(0);
-  const [display, setDisplay] = useState('');
   const [pick, setPick] = useState<Ship | null>(null);
-  const timers = useRef<number[]>([]);
+  const [strip, setStrip] = useState<string[]>([]);
+  const [rollId, setRollId] = useState(0);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const anim = useRef<Animation | null>(null);
+  const pending = useRef<{ ship: Ship; used: number } | null>(null);
+  const startedRoll = useRef(0);
 
-  useEffect(
-    () => () => {
-      timers.current.forEach((t) => window.clearInterval(t));
-    },
-    [],
-  );
+  useEffect(() => () => anim.current?.cancel(), []);
+
+  // Runs once the new strip is on screen, so the reel starts from the row
+  // that was already showing.
+  useEffect(() => {
+    const el = stripRef.current;
+    const landing = pending.current;
+    if (rollId === 0 || rollId === startedRoll.current || !el || !landing) return;
+    startedRoll.current = rollId;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const end = -TRAVEL_ROWS * ROW;
+    const a = el.animate(reelKeyframes(end, reduced), {
+      duration: reduced ? 500 : landing.used > 1 ? RESPIN_MS : ROLL_MS,
+      easing: reduced ? 'ease-out' : 'linear',
+      fill: 'forwards',
+    });
+    anim.current = a;
+    a.onfinish = () => {
+      pending.current = null;
+      setPick(landing.ship);
+      setStage(landing.used >= 2 ? 'locked' : 'picked');
+      if (landing.used >= 2) flash('Locked in. That is the one.');
+    };
+  }, [rollId, flash]);
 
   function roll() {
-    if (active.length === 0) return;
-    setStage('rolling');
+    if (active.length === 0 || stage === 'rolling') return;
+    anim.current?.cancel();
+    const chosen = active[Math.floor(Math.random() * active.length)];
+    const showing = strip.length > 0 ? strip[strip.length - 2] : titles[0];
+    const used = spins + 1;
+    pending.current = { ship: chosen, used };
+    setSpins(used);
     setPick(null);
-    const frame = window.setInterval(() => {
-      const r = active[Math.floor(Math.random() * active.length)];
-      setDisplay(r.title);
-    }, FRAME_MS);
-    timers.current.push(frame);
-
-    window.setTimeout(() => {
-      window.clearInterval(frame);
-      const chosen = active[Math.floor(Math.random() * active.length)];
-      setPick(chosen);
-      setDisplay(chosen.title);
-      const used = spins + 1;
-      setSpins(used);
-      setStage(used >= 2 ? 'locked' : 'picked');
-      if (used >= 2) flash('Locked in. That is the one.');
-    }, ROLL_MS);
+    setStage('rolling');
+    setStrip(buildStrip(titles, showing, chosen.title));
+    setRollId((n) => n + 1);
   }
 
   async function start() {
@@ -55,10 +109,11 @@ export default function Spin({ state, flash }: Props) {
   }
 
   function reset() {
+    anim.current?.cancel();
     setStage('idle');
     setSpins(0);
     setPick(null);
-    setDisplay('');
+    setStrip([]);
   }
 
   if (state.burst) {
@@ -87,6 +142,13 @@ export default function Spin({ state, flash }: Props) {
     );
   }
 
+  const rows =
+    strip.length > 0
+      ? strip
+      : [titles[titles.length - 1], titles[0], titles[1 % titles.length]];
+  const landed = stage === 'picked' || stage === 'locked';
+  const winRow = strip.length > 0 ? strip.length - 2 : -1;
+
   return (
     <div className="wrap">
       <h1>Spin</h1>
@@ -97,18 +159,30 @@ export default function Spin({ state, flash }: Props) {
 
       <div className="spin-stage">
         <div
-          className={`spin-slot ${stage === 'rolling' ? 'rolling' : ''} ${
+          className={`reel ${stage === 'idle' ? 'idle' : ''} ${landed ? 'landed' : ''} ${
             stage === 'locked' ? 'locked' : ''
           }`}
+          style={{ ['--row' as string]: `${ROW}px` }}
+          aria-live="polite"
         >
-          <span className={stage === 'idle' ? '' : 'picked'}>
-            {stage === 'idle' ? 'Hit spin' : display}
-          </span>
+          <i className="pointer l" aria-hidden="true" />
+          <i className="pointer r" aria-hidden="true" />
+          <div className="reel-strip" ref={stripRef}>
+            {rows.map((t, i) => (
+              <div
+                key={`${rollId}-${i}`}
+                className={`reel-row ${landed && i === winRow ? 'win' : ''}`}
+                aria-hidden={landed && i === winRow ? undefined : true}
+              >
+                {t}
+              </div>
+            ))}
+          </div>
         </div>
 
         {stage === 'idle' && (
           <button className="btn primary huge" onClick={roll}>
-            &#9889; Spin
+            Spin
           </button>
         )}
 
@@ -118,7 +192,7 @@ export default function Spin({ state, flash }: Props) {
           </button>
         )}
 
-        {(stage === 'picked' || stage === 'locked') && pick && (
+        {landed && pick && (
           <>
             <div className="scope-card" style={{ textAlign: 'left', width: '100%', maxWidth: 560 }}>
               <div className="k">What will be live in 2 hours</div>
