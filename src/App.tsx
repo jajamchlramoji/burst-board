@@ -6,6 +6,7 @@ import Spin from './views/Spin';
 import Burst from './views/Burst';
 import ShipLog from './views/ShipLog';
 import Settings from './views/Settings';
+import Mark from './lib/Mark';
 
 export type Tab = 'inbox' | 'shrink' | 'spin' | 'burst' | 'log' | 'settings';
 
@@ -42,7 +43,7 @@ export default function App() {
       <div className="shell">
         <div className="titlebar">
           <div className="brand">
-            <span className="bolt">&#9889;</span> Burst Board
+            <Mark /> Burst Board
           </div>
         </div>
         <div className="main">
@@ -70,7 +71,7 @@ export default function App() {
     <div className="shell">
       <div className="titlebar">
         <div className="brand">
-          <span className="bolt">&#9889;</span> Burst Board
+          <Mark /> Burst Board
         </div>
         <div className="tabs">
           {TABS.map((t) => (

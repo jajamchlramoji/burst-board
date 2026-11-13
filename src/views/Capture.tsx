@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { IdeaTag } from '../../shared/types';
 import { FOMO_TEMPLATE } from '../../shared/types';
+import Mark from '../lib/Mark';
 
 /** The tiny always-on-top window opened by the global hotkey or the tray. */
 export default function Capture() {
@@ -49,7 +50,7 @@ export default function Capture() {
   return (
     <div className="capture">
       <div className="cap-bar">
-        <span style={{ color: 'var(--accent)' }}>&#9889;</span> Quick capture
+        <Mark /> Quick capture
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 11 }}>esc to close &middot; &#8984;&#9166; to save</span>
       </div>

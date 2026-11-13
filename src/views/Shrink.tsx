@@ -294,8 +294,8 @@ export default function Shrink({ state, flash, goSpin, fromIdeaId, clearFrom }: 
                   <span>{s.liveIn2h}</span>
                 </div>
                 {s.blockedReason && (
-                  <div className="kv" style={{ marginTop: 6 }}>
-                    <span className="k">Stopped because</span>
+                  <div className="blocker">
+                    <span className="k">Blocked</span>
                     <span>{s.blockedReason}</span>
                   </div>
                 )}

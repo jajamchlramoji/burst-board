@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import Capture from './views/Capture';
 import Mini from './views/Mini';
+import '@fontsource/instrument-serif/latin-400.css';
+import '@fontsource/instrument-serif/latin-400-italic.css';
 import './styles.css';
 
 function route(): string {

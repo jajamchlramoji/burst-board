@@ -223,7 +223,7 @@ function LogRow({
               {ship.win && (
                 <>
                   <span className="k">Win</span>
-                  <span>{ship.win}</span>
+                  <span className="win">{ship.win}</span>
                 </>
               )}
               {ship.v2 && (
