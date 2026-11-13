@@ -33,7 +33,7 @@ export const PHASE_LABEL: Record<BurstPhase, string> = {
 
 export const PHASE_HINT: Record<BurstPhase, string> = {
   scope: 'First 15 minutes. Just get clear on the one sentence below.',
-  build: 'Build the ugly version. Ship checkpoint at 2:00.',
+  build: 'Build the ugly version. Done early? Ship it now. Checkpoint at 2:00.',
   improve: 'Bonus time. Already shipped? Make it a bit better and reship.',
   log: 'Final 10 minutes. Write the one-line win and the possible v2.',
   done: 'Four hours done. Log it and rest.',

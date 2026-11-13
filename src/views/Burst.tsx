@@ -35,6 +35,7 @@ export default function Burst({ state, flash, goSpin }: Props) {
   const [logFor, setLogFor] = useState<string | null>(null);
   const [endConfirm, setEndConfirm] = useState(false);
   const [parkReason, setParkReason] = useState('');
+  const [shipOpen, setShipOpen] = useState(false);
 
   if (!burst || !ship) {
     return (
@@ -74,6 +75,7 @@ export default function Burst({ state, flash, goSpin }: Props) {
   // restart instead of snapping the modal straight back.
   const snoozedUntil = burst.snoozeUntil ? new Date(burst.snoozeUntil).getTime() : 0;
   const showCheckpoint = checkpointDue && now > snoozedUntil && !paused;
+  const showShip = !burst.shipped && !endConfirm && (shipOpen || showCheckpoint);
   const logDue = ms >= LOG_PROMPT_MS;
 
   const shipNow = async (raw: string) => {
@@ -83,6 +85,7 @@ export default function Burst({ state, flash, goSpin }: Props) {
       return;
     }
     setUrlDraft('');
+    setShipOpen(false);
     flash('Shipped. That counts, however ugly.');
   };
 
@@ -124,7 +127,11 @@ export default function Burst({ state, flash, goSpin }: Props) {
         <div className="phase-name">{PHASE_LABEL[phase]}</div>
         <div className={`clock ${paused ? 'paused' : ''}`}>{formatClock(ms)}</div>
         <div className="phase-hint">
-          {paused ? 'Paused. The clock waits for you.' : PHASE_HINT[phase]}
+          {paused
+            ? 'Paused. The clock waits for you.'
+            : burst.shipped && phase === 'build'
+              ? 'Shipped. Polish and reship, or finish whenever you like.'
+              : PHASE_HINT[phase]}
         </div>
       </div>
 
@@ -187,15 +194,21 @@ export default function Burst({ state, flash, goSpin }: Props) {
         >
           {burst.miniTimer ? 'Hide mini timer' : 'Mini timer on top'}
         </button>
-        {!burst.shipped && ms >= SHIP_CHECKPOINT_MS && (
-          <button className="btn primary big" onClick={() => void window.burst.burst.snooze(0)}>
-            Ship it now
-          </button>
-        )}
         <div style={{ flex: 1 }} />
-        <button className="btn big ghost" onClick={() => setEndConfirm(true)}>
-          End burst
-        </button>
+        {burst.shipped ? (
+          <button className="btn primary big" onClick={() => setEndConfirm(true)}>
+            Finish &amp; log
+          </button>
+        ) : (
+          <>
+            <button className="btn big" onClick={() => setEndConfirm(true)}>
+              End burst
+            </button>
+            <button className="btn primary big" onClick={() => setShipOpen(true)}>
+              Ship it
+            </button>
+          </>
+        )}
       </div>
 
       {burst.shipped && (
@@ -277,13 +290,14 @@ export default function Burst({ state, flash, goSpin }: Props) {
         </>
       )}
 
-      {showCheckpoint && (
+      {showShip && (
         <div className="modal-back">
           <div className="modal">
-            <h3>Ship it now, ugly is fine.</h3>
+            <h3>{showCheckpoint ? 'Ship it now, ugly is fine.' : 'Ship it.'}</h3>
             <p className="modal-sub">
-              Two hours in. Put the ugly version somewhere public and paste the link. Ugly and live
-              beats polished and private.
+              {showCheckpoint
+                ? 'Two hours in. Put the ugly version somewhere public and paste the link. Ugly and live beats polished and private.'
+                : 'Paste the public link to what went live. That link is what makes it shipped.'}
             </p>
             <label className="field">
               <span className="label">
@@ -297,6 +311,7 @@ export default function Burst({ state, flash, goSpin }: Props) {
                 onChange={(e) => setUrlDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void shipNow(urlDraft);
+                  if (e.key === 'Escape' && !showCheckpoint) setShipOpen(false);
                 }}
               />
             </label>
@@ -304,16 +319,29 @@ export default function Burst({ state, flash, goSpin }: Props) {
               <button className="btn primary big" onClick={() => void shipNow(urlDraft)}>
                 It is live
               </button>
+              {showCheckpoint ? (
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setShipOpen(false);
+                    void window.burst.burst.snooze(SNOOZE_MINUTES);
+                    flash('Back in 5 minutes.');
+                  }}
+                >
+                  5 more minutes
+                </button>
+              ) : (
+                <button className="btn" onClick={() => setShipOpen(false)}>
+                  Not yet
+                </button>
+              )}
               <button
-                className="btn"
+                className="btn ghost"
                 onClick={() => {
-                  void window.burst.burst.snooze(SNOOZE_MINUTES);
-                  flash('Back in 5 minutes.');
+                  setShipOpen(false);
+                  setEndConfirm(true);
                 }}
               >
-                5 more minutes
-              </button>
-              <button className="btn ghost" onClick={() => setEndConfirm(true)}>
                 Park it instead
               </button>
             </div>
@@ -368,6 +396,18 @@ export default function Burst({ state, flash, goSpin }: Props) {
               <button className="btn" onClick={() => { setEndConfirm(false); setParkReason(''); }}>
                 Keep going
               </button>
+              {!burst.shipped && (
+                <button
+                  className="btn ghost"
+                  onClick={() => {
+                    setEndConfirm(false);
+                    setParkReason('');
+                    setShipOpen(true);
+                  }}
+                >
+                  Actually, I shipped it
+                </button>
+              )}
             </div>
           </div>
         </div>
