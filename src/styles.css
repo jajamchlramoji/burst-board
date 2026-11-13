@@ -922,6 +922,18 @@ kbd {
 
 /* ---------- Shortcuts sheet ---------- */
 .modal.sheet { max-width: 440px; }
+.modal.share { max-width: 760px; }
+.share-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1200 / 675;
+  border-radius: 12px;
+  border: 1px solid var(--hair-2);
+  box-shadow: 0 18px 40px -18px var(--shadow-modal);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.share-canvas.ready { opacity: 1; }
 .sheet h4 {
   margin: 18px 0 6px;
   font-size: 10.5px;

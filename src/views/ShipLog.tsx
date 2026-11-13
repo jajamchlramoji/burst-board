@@ -5,6 +5,8 @@ import { burstDayCount, daysSinceLastBurst, shipStreak, shipsThisMonth } from '.
 import { fmtDateTime } from '../lib/hooks';
 import { useKeydown } from '../lib/keys';
 import { offerUndo } from '../lib/undo';
+import type { CardData } from '../lib/shareCard';
+import ShareDialog from './ShareDialog';
 
 interface Props {
   state: AppState;
@@ -23,6 +25,19 @@ export default function ShipLog({ state, flash }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [removing, setRemoving] = useState<Ship | null>(null);
+  const [sharing, setSharing] = useState<CardData | null>(null);
+
+  const cardFor = (s: Ship): CardData => {
+    const bursts = state.history.filter((h) => h.shipId === s.id);
+    return {
+      title: s.title,
+      win: s.win,
+      url: s.urls[0] ?? null,
+      minutes: bursts.reduce((sum, h) => sum + h.minutes, 0),
+      bursts: bursts.length,
+      shippedAt: s.shippedAt,
+    };
+  };
 
   useKeydown((e) => {
     if (e.key === 'Escape' && removing) setRemoving(null);
@@ -126,6 +141,7 @@ export default function ShipLog({ state, flash }: Props) {
             editing={editing === s.id}
             onEdit={() => setEditing(editing === s.id ? null : s.id)}
             onRemove={() => setRemoving(s)}
+            onShare={() => setSharing(cardFor(s))}
             flash={flash}
           />
         ))
@@ -150,6 +166,8 @@ export default function ShipLog({ state, flash }: Props) {
           ))}
         </>
       )}
+
+      {sharing && <ShareDialog card={sharing} onClose={() => setSharing(null)} flash={flash} />}
 
       {removing && (
         <div className="modal-back" onClick={() => setRemoving(null)}>
@@ -185,12 +203,14 @@ function LogRow({
   editing,
   onEdit,
   onRemove,
+  onShare,
   flash,
 }: {
   ship: Ship;
   editing: boolean;
   onEdit: () => void;
   onRemove: () => void;
+  onShare: () => void;
   flash: (m: string | null) => void;
 }) {
   const [win, setWin] = useState(ship.win);
@@ -285,6 +305,9 @@ function LogRow({
       </div>
       {!editing && (
         <div className="actions">
+          <button className="btn sm primary" title="Make an image for LinkedIn or X" onClick={onShare}>
+            Share
+          </button>
           <button className="btn sm" onClick={onEdit}>
             Edit
           </button>

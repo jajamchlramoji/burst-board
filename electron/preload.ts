@@ -63,6 +63,10 @@ const api: BurstApi = {
   undo: () => ipcRenderer.invoke('app:undo'),
   moveMini: (dx, dy) => ipcRenderer.send('window:moveMini', dx, dy),
   exportMarkdown: () => ipcRenderer.invoke('export:markdown'),
+  share: {
+    copyImage: (dataUrl) => ipcRenderer.invoke('share:copyImage', dataUrl),
+    saveImage: (dataUrl, name) => ipcRenderer.invoke('share:saveImage', dataUrl, name),
+  },
 };
 
 contextBridge.exposeInMainWorld('burst', api);

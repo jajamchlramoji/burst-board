@@ -283,6 +283,25 @@ app.whenReady().then(async () => {
     t('ship log lists the ship and its win', logText.includes(ship().title) && logText.includes('It went live in 40 minutes'));
     await shot('07-shiplog');
 
+    // share card
+    const share = await js(`
+      const row = [...document.querySelectorAll('.log-entry')][0];
+      row.querySelector('button[title^="Make an image"]').click();
+      for (let i = 0; i < 30 && !document.querySelector('.share-canvas.ready'); i++) await T.sleep(100);
+      const c = document.querySelector('.share-canvas');
+      const bad = await window.burst.share.copyImage('data:text/html,<b>nope</b>');
+      return { ready: !!document.querySelector('.share-canvas.ready'), w: c?.width, h: c?.height,
+        buttons: [...document.querySelectorAll('.modal.share button')].map((b) => b.textContent),
+        png: c ? c.toDataURL('image/png') : '', bad };
+    `);
+    t('Share opens a 1200x675 card', share.ready && share.w === 1200 && share.h === 675, JSON.stringify([share.w, share.h]));
+    t('with copy, save and post buttons', ['Copy image', 'Save PNG…', 'Post on X', 'Post on LinkedIn'].every((b) => share.buttons.includes(b)));
+    t('a non-PNG is refused for the clipboard', share.bad === false);
+    if (SHOTS) fs.writeFileSync(path.join(SHOTS, '07c-share-card.png'), Buffer.from(share.png.split(',')[1], 'base64'));
+    await shot('07c-share-dialog');
+    await js(`await T.key('Escape');`);
+    t('Esc closes the share dialog', !(await js(`return !!document.querySelector('.modal.share')`)));
+
     // delete from the log: back to the Inbox, undo, delete permanently, undo
     const logged = structuredClone(ship());
     const histBefore = S().history.length;

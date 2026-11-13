@@ -72,4 +72,9 @@ export interface BurstApi {
   /** Drag the mini timer window by this many pixels. */
   moveMini: (dx: number, dy: number) => void;
   exportMarkdown: () => Promise<ExportResult>;
+  /** The ship share card, as a PNG data URL. */
+  share: {
+    copyImage: (dataUrl: string) => Promise<boolean>;
+    saveImage: (dataUrl: string, name: string) => Promise<ExportResult>;
+  };
 }

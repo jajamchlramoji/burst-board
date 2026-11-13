@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, shell } from 'electron';
 import { Store } from './store';
+import { copyCard, saveCard } from './share';
 import { BURST_END_MS, elapsedMs } from '../shared/burst';
 import { isPublicUrl, normalizeUrl } from '../shared/url';
 import type { ExportResult, Reply } from '../shared/api';
@@ -538,6 +539,9 @@ export function registerIpc(store: Store, hooks: IpcHooks): void {
     const [x, y] = win.getPosition();
     win.setPosition(Math.round(x + dx), Math.round(y + dy));
   });
+
+  ipcMain.handle('share:copyImage', (_e, dataUrl: unknown) => copyCard(dataUrl));
+  ipcMain.handle('share:saveImage', (_e, dataUrl: unknown, name: unknown) => saveCard(dataUrl, name));
 
   ipcMain.handle('export:markdown', async () => {
     return (await hooks.exportMarkdown?.()) ?? { ok: false, error: 'Export is unavailable.' };
