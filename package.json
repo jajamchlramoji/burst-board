@@ -14,6 +14,7 @@
     "build:renderer": "vite build",
     "build": "rimraf dist dist-electron && npm run build:electron && npm run build:renderer",
     "icon": "node scripts/make-icon.mjs",
+    "icon:render": "electron scripts/render-icon.cjs",
     "start": "npm run build && electron .",
     "dist:mac": "npm run icon && npm run build && electron-builder --mac --arm64",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
