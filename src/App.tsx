@@ -8,6 +8,7 @@ import ShipLog from './views/ShipLog';
 import Settings from './views/Settings';
 import ShortcutSheet from './views/Shortcuts';
 import Mark from './lib/Mark';
+import ThemeToggle from './lib/ThemeToggle';
 import { isTyping, useKeydown } from './lib/keys';
 import { onUndoOffer } from './lib/undo';
 
@@ -129,6 +130,7 @@ export default function App() {
           <button className="btn sm" onClick={() => void window.burst.openCapture()}>
             Quick capture
           </button>
+          <ThemeToggle />
           <button
             className={`tab settings-btn ${tab === 'settings' ? 'active' : ''}`}
             onClick={() => setTab('settings')}

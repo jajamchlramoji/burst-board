@@ -56,7 +56,7 @@ app.whenReady().then(async () => {
     broadcast: () => broadcastState(store),
     setMiniTimer: () => {},
     applyHotkey: () => {},
-    applyTheme: () => {},
+    applyTheme: () => { nativeTheme.themeSource = store.get().settings.theme; },
     refreshTray: () => {},
     openCapture: () => {},
     closeCapture: () => {},
@@ -390,6 +390,19 @@ app.whenReady().then(async () => {
     t('Esc closes it', !(await js(`return !!document.querySelector('.modal')`)));
     await js(`document.querySelector('button[title^="Settings"]').click(); await T.sleep(200); await T.click('Light'); await T.sleep(200);`);
     t('theme choice saved', S().settings.theme === 'light', S().settings.theme);
+    await shot('10-light');
+
+    // ---------------- Sun/moon toggle ----------------
+    const lightBtn = await js(`const b = document.querySelector('.theme-btn'); return b ? { cls: b.className, label: b.getAttribute('aria-label') } : null`);
+    t('title bar has the sun/moon toggle', !!lightBtn && lightBtn.cls.includes('is-light'), JSON.stringify(lightBtn));
+    t('in light it offers dark (moon)', lightBtn && lightBtn.label === 'Dark mode');
+    await js(`document.querySelector('.theme-btn').click(); await T.sleep(600);`);
+    t('click switches to dark', S().settings.theme === 'dark' && nativeTheme.shouldUseDarkColors, S().settings.theme);
+    const darkBtn = await js(`const b = document.querySelector('.theme-btn'); return { cls: b.className, bg: getComputedStyle(document.body).backgroundColor }`);
+    t('and the icon turns into the sun', darkBtn.cls.includes('is-dark'), JSON.stringify(darkBtn));
+    await shot('11-dark-toggle');
+    await js(`document.querySelector('.theme-btn').click(); await T.sleep(600);`);
+    t('click again goes back to light', S().settings.theme === 'light' && !nativeTheme.shouldUseDarkColors);
     await js(`await T.click('Dark'); await T.sleep(200);`);
 
     // ---------------- Persistence ----------------
